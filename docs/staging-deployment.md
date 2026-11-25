@@ -6,84 +6,127 @@ bucket in N. Virginia (`us-east-1`), and the GitHub repository
 unless stated otherwise. Review costs and permissions before creating AWS
 resources; a failed deployment can still leave billable resources behind.
 
+## Before you start: which AWS account does what
+
+This setup uses an AWS Organization with separate accounts. On the
+**AWS sign-ins** page each account is a card: select **Sign in** on a card, or
+its name if it is already signed in. Signing in only opens a console session;
+it changes nothing.
+
+| Account | Used for |
+|---|---|
+| Workload account | Everything this guide creates: state bucket, OIDC provider, website bucket, CloudFront, deploy role, health check, alarm and SNS topic. The AWS CLI and Terraform must use this account. |
+| Management account | The organization's service control policies (section 1, step 3) and the combined bill and credits (section 5). |
+| Identity Center delegated admin account, if present | Manages users and sign-in permissions. Nothing to do for this project. |
+
 ## 1. Prepare AWS
 
-1. Install the AWS CLI and Terraform 1.10 or later. Sign in with an approved
-   infrastructure identity and run:
+1. **Tools and identity.** Install the AWS CLI and Terraform 1.10 or later
+   (`versions.tf` requires `>= 1.10.0, < 2.0.0`). Configure the CLI with an
+   approved infrastructure identity for the workload account, then run:
 
    ```powershell
    # Show the AWS account and identity used by the current credentials.
    aws sts get-caller-identity
    ```
 
-   Check the account before continuing; do not share credentials.
-2. Resolve any CloudFront account-verification requirement with AWS Support.
-   A new account can fail with "Your account must be verified before you can
-   add new CloudFront resources". Open a case under **Account and billing >
-   Account Activation > Account Verification** and wait until it is resolved
-   before applying.
+   Check that `Account` is the workload account; do not share credentials.
 
-   The organization must also permit this project's operations in
-   `us-east-1`. Route 53 health-check metrics exist only there, so the SNS
-   topic and CloudWatch alarm must be there too, and this guide also puts the
-   website bucket there. If a region-restriction SCP allows only global
-   services in `us-east-1`, this project needed these actions added to its
-   exempted list (`NotAction`), besides CloudFront, IAM and Route 53:
-   `s3:*`, `sns:*`, `cloudwatch:PutMetricAlarm`, `cloudwatch:DeleteAlarms`,
-   `cloudwatch:TagResource` and `cloudwatch:UntagResource`. See
-   [If bucket creation is denied by a service control policy](#if-bucket-creation-is-denied-by-a-service-control-policy)
-   for how to request the change.
-3. In IAM, open **Identity providers**. Reuse the provider for
-   `https://token.actions.githubusercontent.com` if present; its audience
-   must include `sts.amazonaws.com`. Otherwise, create an **OpenID Connect**
-   provider using that URL and audience. Copy its ARN; it has the form
-   `arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com`.
-   This is not the deploy role ARN that Terraform outputs later. An account
-   can have only one provider for this URL; it may be shared with other
-   projects.
+2. **CloudFront account verification.** A new account can fail with "Your
+   account must be verified before you can add new CloudFront resources".
+   The hold covers the whole account, not one region. Signed in to the
+   workload account:
+
+   1. Open **Support Center**: type `Support` in the console search bar, or
+      go to `https://console.aws.amazon.com/support/home`.
+   2. Describe the problem in the text box and paste the error text. AWS
+      first shows an automated answer; select **Create a case**.
+   3. Choose **Case type: Account and billing**, **Service: Account
+      Activation**, **Category: Account Verification** and **Severity:
+      General question**. Account and billing cases are free on the Basic
+      support plan.
+   4. Use a subject such as "Account verification needed to create
+      CloudFront distributions", keep the error text in the description, and
+      submit.
+   5. Wait until AWS resolves the case, shown in Support Center's case list,
+      before running `terraform apply`.
+
+3. **Region service control policy (SCP).** Route 53 health-check metrics
+   exist only in `us-east-1`, so the CloudWatch alarm and SNS topic must be
+   there too, and this guide also puts both buckets there. If the
+   organization restricts regions, `terraform apply` or bucket creation fails
+   with "explicit deny in a service control policy" and the policy's ID
+   (`p-...`). Adding IAM permissions cannot override that deny. Signed in to
+   the **management account**:
+
+   1. Open **AWS Organizations > Policies > Service control policies** and
+      open the policy whose ID is in the error. In this organization it is
+      `AdvancedModeRegionRestrictionSecurityControlPolicy`. Its **Targets**
+      tab shows **Root**, so it applies to every account.
+   2. On the **Content** tab, find the statement with
+      `"Sid": "UsEast1Partitional"`. It is a `Deny` with a `NotAction` list
+      and the condition `aws:RequestedRegion` = `us-east-1`. Every action in
+      that list is exempt, so allowed in `us-east-1`; everything else is
+      denied there.
+   3. Copy the whole policy JSON into a local file as a backup. SCPs keep no
+      version history, so that copy is the only way back.
+   4. Select **Edit policy**. In the `UsEast1Partitional` `NotAction` list
+      only:
+      - replace all the separate `"s3:..."` entries with one `"s3:*"` (state
+        bucket, website bucket and the deploy upload);
+      - add `"sns:*"` (alert topic and email subscription);
+      - add `"cloudwatch:PutMetricAlarm"`, `"cloudwatch:DeleteAlarms"`,
+        `"cloudwatch:TagResource"` and `"cloudwatch:UntagResource"` (create,
+        tag and delete the health alarm).
+
+      Each entry is in double quotes and followed by a comma, except the last
+      entry in the list. Leave the other statements unchanged.
+   5. Select **Save changes**. The editor may mark a few entries that were
+      already in the policy as errors; they do not block saving. Reload the
+      page and check that the new entries are there. The change takes effect
+      at once for every account under the target.
+
+   The same list must also still contain `cloudfront:*`, `iam:*`,
+   `route53:*`, `sts:*` (GitHub's sign-in to AWS), `cloudwatch:Describe*`,
+   `cloudwatch:Get*`, `cloudwatch:List*` and `cloudtrail:LookupEvents`; in
+   this organization they were already there. If the policy is ever changed
+   or regenerated and errors for S3, SNS or CloudWatch in `us-east-1` return,
+   check this list first.
+
+4. **GitHub OIDC provider.** Signed in to the workload account:
+
+   1. Open **IAM**, then **Identity providers** under **Access management**
+      in the left menu.
+   2. If `token.actions.githubusercontent.com` is listed, open it and check
+      that its audiences include `sts.amazonaws.com`. Reuse it: an account
+      can have only one provider for this URL, and other projects may use it.
+   3. Otherwise select **Add provider**, choose **OpenID Connect**, enter the
+      provider URL `https://token.actions.githubusercontent.com` and the
+      audience `sts.amazonaws.com`, and select **Add provider**.
+   4. Copy the provider's ARN. It has the form
+      `arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com`.
+      It is not the deploy role ARN that Terraform outputs later.
 
 ## 2. Prepare the Terraform state bucket
 
-Reuse an approved private state bucket if one already exists. Otherwise,
-create a general-purpose S3 bucket in `us-east-1` with a globally unique name,
-all public access blocked, versioning enabled, and SSE-S3 encryption. Use a
-different bucket from the website bucket. Restrict state and lock-file access
-to the approved infrastructure identity; public access blocking alone does
-not restrict other IAM principals.
+Reuse an approved private state bucket if one already exists. Otherwise create
+one in the workload account, separate from the website bucket. Bucket names
+are global, so pick a unique one such as
+`one-step-towards-ai-staging-state-<unique-suffix>`.
 
-For clarity, use names such as `one-step-towards-ai-staging-state-<unique-suffix>`
-for the state bucket and `one-step-towards-ai-staging-site-<unique-suffix>`
-for the website bucket. Bucket names must be globally unique, so check that
-your chosen names are available.
+**Option A, AWS console:**
 
-### If bucket creation is denied by a service control policy
-
-An error saying that `s3:CreateBucket` has an **explicit deny in a service
-control policy (SCP)** means an AWS Organizations policy is blocking the
-request. Adding permissions to the IAM role alone cannot override that deny.
-The same restriction can also prevent Terraform from creating the website
-bucket.
-
-1. Confirm the AWS account and requested bucket region, and give the
-   organization administrator the error, including the SCP ID. Do not share
-   credentials.
-2. Ask the administrator to inspect that policy and its attachments in the
-   AWS Organizations management account. The deny may be intentional or
-   conditional, for example on the requested region.
-3. If permitted by the organization, the administrator should review a
-   narrowly scoped policy change for the necessary account, region, and
-   actions. Do not remove a broad deny without understanding its effect on
-   other accounts and resources. The deployment identity still needs the
-   appropriate IAM permissions.
-4. After the approved change, retry bucket creation. Alternatively, use an
-   approved existing state bucket, with its actual region in `backend.hcl`;
-   the website bucket and monitoring operations must still be permitted.
-   If a previous attempt may have created a bucket, inspect it before
-   retrying rather than creating duplicate resources.
+1. Set the console region at the top right to **United States
+   (N. Virginia) us-east-1**, then open **S3 > Buckets > Create bucket**.
+2. Choose **General purpose** and enter the bucket name.
+3. Keep **ACLs disabled**, keep **Block all public access** selected, set
+   **Bucket Versioning** to **Enable**, and keep default encryption as
+   **SSE-S3**.
+4. Select **Create bucket**, then add the HTTPS-only policy below.
 
 To require HTTPS for the state bucket:
 
-1. In the AWS Console, open **S3 > Buckets** and select the state bucket.
+1. Open **S3 > Buckets** and select the state bucket.
 2. Select **Permissions**, find **Bucket policy**, and select **Edit**.
 3. Paste the policy below, replacing both occurrences of
    `YOUR-STATE-BUCKET-NAME` with the actual state bucket name.
@@ -112,18 +155,38 @@ To require HTTPS for the state bucket:
 }
 ```
 
-Create `terraform\environments\staging\backend.hcl` from
-`backend.example.hcl` if it does not already exist. First check manually
-whether `backend.hcl` exists; if it does, inspect it instead of running the
-copy command, which would overwrite it. If it is absent, run this from the
-repository root:
+**Option B, script:** `scripts\bootstrap-state.ps1` creates a bucket named
+`one-step-v1-staging-state-<random>` with the same settings and HTTPS-only
+policy, checks them, and writes `backend.hcl` for you. Preview first, then run
+without `-WhatIf`:
+
+```powershell
+# Preview; replace the account ID with the workload account's 12-digit ID.
+.\scripts\bootstrap-state.ps1 -Environment staging -Region us-east-1 -ExpectedAccountId "123456789012" -WhatIf
+```
+
+The script refuses to run if `backend.hcl` already exists.
+
+### If bucket creation is denied by a service control policy
+
+An error saying that `s3:CreateBucket` has an **explicit deny in a service
+control policy (SCP)** is the organization policy from section 1, step 3.
+Follow those steps in the management account, then retry. If a previous
+attempt may have created a bucket, inspect it before retrying rather than
+creating a duplicate.
+
+### Point Terraform at the state bucket
+
+With Option A, create `terraform\environments\staging\backend.hcl` from the
+template. First check whether `backend.hcl` already exists; if it does,
+inspect it instead, because the copy command would overwrite it:
 
 ```powershell
 # Copy the template to create the local backend configuration.
 Copy-Item .\terraform\environments\staging\backend.example.hcl .\terraform\environments\staging\backend.hcl
 ```
 
-Then update the file with your state bucket name:
+Then set your state bucket name:
 
 ```hcl
 bucket = "YOUR-STATE-BUCKET-NAME"
@@ -131,33 +194,21 @@ key    = "one-step-at-a-time/staging/terraform.tfstate"
 region = "us-east-1"
 ```
 
-Update `terraform\environments\staging\backend.hcl`: replace the `bucket`
-placeholder with your state bucket name, and check that `key` and `region`
-match your intended state location. The bootstrap script refuses to overwrite
-an existing `backend.hcl`.
-
-`backend.example.hcl` is a reusable template. `backend.hcl` contains the
-actual state location for your environment and is ignored by Git, so it
-does not normally appear in a new checkout.
-
-The region must match the actual state bucket. Changing this setting does not
-move an existing bucket or its state. If moving existing state to a different
-bucket, follow an approved state migration procedure instead of merely
-reconfiguring the backend. State is sensitive; do not share it or commit the
-backend file. The state bucket and OIDC provider are not created or destroyed
-by the site Terraform configuration.
+`backend.hcl` holds the actual state location and is ignored by Git, so it
+does not appear in a new checkout. The region must match the bucket's actual
+region; changing it does not move a bucket or its state. State is sensitive;
+do not share it or commit the backend file. The state bucket and OIDC
+provider are not created or destroyed by the site Terraform configuration.
 
 ## 3. Configure and provision the site
 
-`site.example.tfvars` is a reusable template with placeholders. The local
-`site.tfvars` contains your environment-specific settings and is ignored by
-Git, keeping those values out of the repository. Do not put credentials in
-either file.
+`site.example.tfvars` is a template with placeholders. The local
+`site.tfvars` holds your settings and is ignored by Git. Do not put
+credentials in either file.
 
 Create `site.tfvars` from the example if it does not already exist. First
-check manually whether `site.tfvars` exists; if it does, inspect it instead of
-running the copy command, which would overwrite it. If it is absent, run
-this from the repository root:
+check whether it exists; if it does, inspect it instead, because the copy
+command would overwrite it:
 
 ```powershell
 # Copy the template to create the local site configuration.
@@ -172,7 +223,7 @@ Edit `site.tfvars` and replace every example value:
 | `environment` | `staging` |
 | `site_bucket_name` | A globally unique website bucket name (see below) |
 | `github_repository` | `EasyLearnJava@6612328/one-step-towards-ai@1470924284` |
-| `github_oidc_provider_arn` | The provider ARN copied in section 1 |
+| `github_oidc_provider_arn` | The provider ARN copied in section 1, step 4 |
 | `alert_email` | A real mailbox you can read |
 
 `github_repository` must match the subject GitHub puts in its OIDC token
@@ -191,20 +242,15 @@ Two mistakes still apply cleanly but break later:
 - Leaving `replace@example.com` in `alert_email` leaves the SNS subscription
   in `PendingConfirmation`, so alerts never arrive.
 
-S3 bucket names cannot contain underscores.
-
-The `site_bucket_name` is for the website bucket that Terraform creates during
-apply. It must be different from the state bucket created earlier. The
-following optional command suggests a unique website bucket name; you can
-choose another available name instead:
+The website bucket is created by Terraform during apply and must differ from
+the state bucket. S3 bucket names cannot contain underscores. This optional
+command suggests a name; S3 checks that it is free when the bucket is
+created:
 
 ```powershell
 # Print a candidate name; this does not create a bucket.
 "one-step-towards-ai-staging-site-$(Get-Date -Format 'yyyyMMddHHmmss')"
 ```
-
-The timestamp does not guarantee uniqueness; S3 checks the name's availability
-when the bucket is created. Do not put credentials in the file.
 
 ```powershell
 # Change to the directory containing the site Terraform configuration.
@@ -220,8 +266,12 @@ terraform plan "-var-file=..\environments\staging\site.tfvars" "-out=staging.tfp
 terraform show staging.tfplan
 ```
 
-Review the account, resources, permissions, and charges. Only if the plan is
-correct, run:
+On a first run the plan should show **15 to add**: the website bucket and its
+five settings (public access block, ownership, versioning, encryption,
+policy), the CloudFront distribution, origin access control and headers
+policy, the deploy role and its policy, the health check, the alarm, the SNS
+topic and the email subscription. Review the account, resources, permissions
+and charges. Only if the plan is correct, run:
 
 ```powershell
 # Apply the reviewed plan to create or change AWS resources.
@@ -231,28 +281,39 @@ terraform apply staging.tfplan
 terraform output
 ```
 
+Creating the CloudFront distribution takes several minutes. Keep the four
+outputs: `website_url`, `site_bucket_name`, `deploy_role_arn` and
+`aws_account_id`, which must be the workload account.
+
+AWS then emails `alert_email` a subscription confirmation from AWS
+Notifications; it may land in spam. Select **Confirm subscription** in it. The
+link expires after three days; if it has, open **SNS > Subscriptions** in
+`us-east-1`, select the subscription and choose **Request confirmation**.
+
 Saved plans may contain sensitive data. If apply fails, inspect the error and
 Terraform state; resources may already exist. After fixing the cause, create
-and review a fresh plan rather than reusing the failed plan. Confirm the SNS
-subscription email to receive alerts.
+and review a fresh plan rather than reusing the failed plan.
 
 ## 4. Publish using GitHub Actions
 
 Push the project to the intended repository. GitHub runs workflows only from
-`.github/workflows` at the repository root.
+`.github/workflows` at the repository root. Each push to `main` runs the
+**Checks** workflow, which validates the Terraform files and never touches
+AWS.
 
 Create the `staging` environment and restrict it to `main`:
 
-1. In the repository, open **Settings > Environments > New environment**,
-   enter `staging`, and select **Configure environment**.
+1. In the repository, open the **Settings** tab, then **Environments** in the
+   left menu. Select **New environment**, enter `staging`, and select
+   **Configure environment**.
 2. Under **Deployment branches and tags**, change **No restriction** to
    **Selected branches and tags**.
 3. Select **Add deployment branch or tag rule**, keep **Ref type: Branch**,
    enter `main`, and select **Add rule**. The page then shows
    "1 branch and 0 tags allowed".
-4. Under **Environment variables**, select **Add environment variable** once
-   for each row below. Add them to the environment, not as repository
-   variables.
+4. Under **Environment variables**, select **Add environment variable**, enter
+   the name and value, and select **Add variable**. Repeat for each row
+   below. Add them to the environment, not as repository variables.
 
 | Variable | Value |
 |---|---|
@@ -264,23 +325,23 @@ Create the `staging` environment and restrict it to `main`:
 Until the first deployment, the CloudFront URL returns `403 Forbidden`. That
 is expected: the website bucket has no `index.html` yet.
 
-In **Actions > Deploy website**, select **Run workflow**, keep `main` and
-`staging`, then select **Run workflow** in the form. It uploads
-`web/index.html` and verifies the public response. After pushing a fix, start
-a new run rather than **Re-run jobs**: a re-run reuses the earlier commit, and
-a production deployment requires the same commit to have succeeded in
-staging.
+To deploy, open the **Actions** tab and select **Deploy website** in the left
+list. Select **Run workflow**, keep **Use workflow from: main** and the
+environment `staging`, then select **Run workflow** in the form. The run
+signs in to AWS as the deploy role, uploads `web/index.html`, and passes only
+when the public page matches it; it takes under a minute. Deployments are
+manual: a push never publishes the site. After pushing a fix, start a new run
+rather than **Re-run jobs**: a re-run reuses the earlier commit, and a
+production deployment requires the same commit to have succeeded in staging.
 
-Then check, in `us-east-1` for the AWS items:
+Then check, in the workload account with the console region set to
+`us-east-1`:
 
-1. The CloudFront URL shows the page.
-2. CloudWatch **Alarms** shows `one-step-staging-unavailable` as **OK**. It
-   can take a few minutes after the first deployment.
-3. SNS **Topics > one-step-staging-alerts > Subscriptions** shows the email
-   as **Confirmed**. If it shows `PendingConfirmation`, select the link in
-   the AWS confirmation email.
-
-Deployments are manual, not automatic on push.
+1. The `website_url` shows the page.
+2. **CloudWatch > Alarms > All alarms** shows `one-step-staging-unavailable`
+   as **OK**. It can take a few minutes after the first deployment.
+3. **SNS > Topics > one-step-staging-alerts**, **Subscriptions** tab, shows
+   the email as **Confirmed**.
 
 ### If the deployment fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity"
 
@@ -288,9 +349,10 @@ GitHub reached AWS, but the deploy role's trust policy rejected its token.
 
 1. Check that `github_oidc_provider_arn` in `site.tfvars` is this account's
    provider from section 1, not the example account or the role ARN.
-2. Check that `github_repository` matches what GitHub sent. In CloudTrail
-   (`us-east-1`), open **Event history**, filter **Event name** by
-   `AssumeRoleWithWebIdentity`, and open a failed event. Its
+2. Check that `github_repository` matches what GitHub sent. In the workload
+   account, open **CloudTrail > Event history** with the region set to
+   `us-east-1`. Change the lookup attribute to **Event name**, enter
+   `AssumeRoleWithWebIdentity`, and open a failed event. In its event record,
    `userIdentity.userName` is the exact subject, such as
    `repo:EasyLearnJava@6612328/one-step-towards-ai@1470924284:environment:staging`.
    The part between `repo:` and `:environment:` is the value
@@ -298,7 +360,31 @@ GitHub reached AWS, but the deploy role's trust policy rejected its token.
 3. Correct `site.tfvars`, create and review a fresh plan (only the deploy
    role's trust policy should change), apply it, and start a new run.
 
-## 5. Clean up safely
+## 5. Check costs and credits
+
+The organization pays for all its accounts on one bill, so costs and credits
+are in the **management account**, under **Billing and Cost Management**:
+
+- **Bills**: this month's estimated charges. The **Charges by account** tab
+  shows the workload account separately.
+- **Credits**: each credit's amount used and remaining. **See complete list
+  of services** shows what a credit covers; the AWS Free Tier credit covers
+  Route 53, CloudFront, S3, CloudWatch and SNS.
+- **Cost Explorer**: daily cost by service; filter **Linked account** to the
+  workload account.
+
+Estimates update about once every 24 hours, so a new deployment shows $0 at
+first. Expected cost, from AWS's price list for `us-east-1`:
+
+| Item | Price |
+|---|---|
+| Route 53 health check | The check uses two optional features, HTTPS and text matching, at $1.00 each per month for AWS endpoints or $2.00 each for other endpoints. The basic check is free for the first 50 checks of AWS endpoints, otherwise $0.75 per month. |
+| CloudWatch alarm | $0.10 per month; the free tier includes 10 alarms. |
+| CloudFront, S3, SNS email | Free tier or a few cents. |
+
+About $2 to $6 per month in total, mostly the health check.
+
+## 6. Clean up safely
 
 Before deleting anything, identify the account and environment, pause
 deployments, and save any needed data. Destroying the website bucket deletes
@@ -334,6 +420,7 @@ the [full teardown checklist](operations.md#7-teardown-and-verify-one-environmen
 Its inventory checker expects a complete deployment, so it may not work after
 a partial apply; inspect the state and AWS resources directly in that case.
 
-Keep the state bucket and OIDC provider if their ownership or other uses are
-uncertain. Remove local `backend.hcl`, `site.tfvars`, and saved plan files only
-after cleanup and verification; retain the example files for the next run.
+Keep the state bucket, OIDC provider and the SCP entries from section 1 if
+other projects may use them. Remove local `backend.hcl`, `site.tfvars`, and
+saved plan files only after cleanup and verification; retain the example
+files for the next run.
