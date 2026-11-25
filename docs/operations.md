@@ -8,7 +8,7 @@ These are setup instructions, not a record that the resources already exist. Rev
 - Have access to an AWS account, an approved infrastructure role, a GitHub repository, and GitHub environments.
 - Configure AWS Budgets and alert recipients. Budgets alert on spending; they do not stop it.
 - Prepare an AWS identity authorized to create and verify a state bucket. The bootstrap below creates a separate private, encrypted, versioned S3 bucket for each environment. Restrict access with IAM or organization policies and authorize the infrastructure role for the bucket, state and `.tflock` objects. Public-access blocking does not prevent access granted to other principals by IAM. For different accounts, provision a backend accessible to each account.
-- Create or use the existing IAM OIDC provider for `https://token.actions.githubusercontent.com` in each AWS account. Its audience must include `sts.amazonaws.com`. There can be only one provider for this URL in an account; do not create a duplicate.
+- Create or use the existing IAM OIDC provider for `https://token.actions.githubusercontent.com` in each AWS account. Its audience must include `sts.amazonaws.com`. There can be only one provider for this URL in an account; do not create a duplicate. Its ARN has the form `arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com`; it is not the deploy role ARN that Terraform outputs later.
 - Select unique S3 website bucket names. Do not use the state bucket as a website bucket.
 - Use separate staging and production AWS accounts where practical. In a shared account, use separate roles, buckets, distributions, and state keys, and restrict state access by environment.
 
@@ -58,7 +58,11 @@ Create the local site configuration, which is ignored by Git:
 Copy-Item .\terraform\environments\staging\site.example.tfvars .\terraform\environments\staging\site.tfvars
 ```
 
-Edit `site.tfvars` with the website bucket, region, exact GitHub `owner/repository`, existing OIDC provider ARN, and alert email. Keep `environment = "staging"`. Replace every example value; do not add credentials.
+Edit `site.tfvars` with the website bucket, region, GitHub repository, existing OIDC provider ARN, and alert email. Keep `environment = "staging"`. Replace every example value; do not add credentials.
+
+- `github_repository` must match the subject in GitHub's OIDC token exactly. This repository's tokens include the owner and repository IDs, so use `EasyLearnJava@6612328/one-step-towards-ai@1470924284`, not `EasyLearnJava/one-step-towards-ai`. For another repository, open `https://api.github.com/repos/OWNER/REPO` and use `owner.id` and `id`.
+- `github_oidc_provider_arn` is the provider ARN from this account, not the deploy role ARN. AWS rejects the role ARN with `MalformedPolicyDocument`.
+- A placeholder left in either of those two values still applies cleanly, but every deployment then fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity"; see [troubleshooting](staging-deployment.md#if-the-deployment-fails-with-not-authorized-to-perform-stsassumerolewithwebidentity). A placeholder `alert_email` leaves the alert subscription unconfirmable.
 
 ## 3. Plan and apply staging
 
@@ -89,7 +93,7 @@ The inventory is local and ignored by Git. Keep it until teardown has been verif
 
 ## 4. Configure GitHub and deploy staging
 
-Create GitHub environments named exactly `staging` and `production`. Restrict both to the `main` branch; protect production with required reviewers where your GitHub plan supports it. Protect `main` with pull request review and required checks.
+Create GitHub environments named exactly `staging` and `production`. Restrict both to the `main` branch; protect production with required reviewers where your GitHub plan supports it. Protect `main` with pull request review and required checks. The [staging guide](staging-deployment.md#4-publish-using-github-actions) gives the click path.
 
 Set these GitHub **environment variables** for staging (not repository-wide values):
 
@@ -114,9 +118,18 @@ Set-Location ..\..
 Copy-Item .\terraform\environments\production\site.example.tfvars .\terraform\environments\production\site.tfvars
 ```
 
-Alternatively configure an existing production backend manually using its example file. Fill in the unique production site bucket, GitHub repository, OIDC provider, and alert email. Repeat the staging initialization, plan, and apply commands with `production` replacing `staging`, including `terraform init -reconfigure` before changing backends. Configure the four production GitHub environment variables from the production outputs.
+Alternatively configure an existing production backend manually using its example file. Fill in production `site.tfvars`, replacing every example value:
 
-Before deploying, compare the commit in the successful staging run with the current `main` commit. If they differ, deploy and verify the current `main` commit in staging first. Then run the deployment workflow for `production` and approve it through the protected GitHub environment. The workflow also checks the GitHub deployment API for a successful staging deployment of that exact commit; a missing, failed, or inactive deployment blocks production. Verify the production page and monitoring independently.
+- `site_bucket_name`: a new globally unique production bucket, different from the staging bucket.
+- `github_repository`: the same value as staging, `EasyLearnJava@6612328/one-step-towards-ai@1470924284`. Terraform appends `:environment:production`, so only the `production` GitHub environment can assume the production role.
+- `github_oidc_provider_arn`: the provider in the production account. A separate production account needs its own provider (section 1), and the ARN carries that account's ID.
+- `alert_email`: a real mailbox; confirm the SNS subscription after apply.
+
+A separate, new production account may also need its own CloudFront account verification before apply; see the [staging guide](staging-deployment.md#1-prepare-aws). If the organization's region SCP is attached at the root, the `us-east-1` exemptions added for staging already cover production.
+
+Repeat the staging initialization, plan, and apply commands with `production` replacing `staging`, including `terraform init -reconfigure` before changing backends. In the plan, check that the deploy role's trust `sub` reads `repo:EasyLearnJava@6612328/one-step-towards-ai@1470924284:environment:production`. Configure the four GitHub environment variables (`AWS_REGION`, `SITE_BUCKET`, `WEBSITE_URL`, `AWS_ROLE_ARN`) on the `production` environment from the production outputs.
+
+Before deploying, compare the commit in the successful staging run with the current `main` commit. If they differ, deploy and verify the current `main` commit in staging first. Start a new staging run for it; **Re-run jobs** reuses the earlier run's commit. Then run the deployment workflow for `production` and approve it through the protected GitHub environment. The workflow also checks the GitHub deployment API for a successful staging deployment of that exact commit; a missing, failed, or inactive deployment blocks production. Verify the production page and monitoring independently.
 
 ## 6. Operate and recover
 
