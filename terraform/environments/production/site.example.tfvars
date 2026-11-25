@@ -1,0 +1,6 @@
+aws_region               = "us-east-1"
+environment              = "production"
+site_bucket_name         = "replace-with-globally-unique-production-bucket"
+github_repository        = "replace-owner/replace-repository"
+github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+alert_email              = "replace@example.com"

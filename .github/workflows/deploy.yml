@@ -1,0 +1,78 @@
+name: Deploy website
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deploy the selected main-branch commit to this environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  deployments: read
+  id-token: write
+
+concurrency:
+  group: website-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      SITE_BUCKET: ${{ vars.SITE_BUCKET }}
+      WEBSITE_URL: ${{ vars.WEBSITE_URL }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Require this commit to have passed staging
+        if: inputs.environment == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deployments="$(gh api "repos/${GITHUB_REPOSITORY}/deployments?environment=staging&sha=${GITHUB_SHA}&per_page=100" --jq '.[].id')"
+          for id in $deployments; do
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" --jq '.[0].state')"
+            if [ "$status" = "success" ]; then
+              echo "Staging deployment ${id} succeeded for ${GITHUB_SHA}."
+              exit 0
+            fi
+          done
+          echo "No successful staging deployment found for ${GITHUB_SHA}." >&2
+          exit 1
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Publish HTML
+        run: |
+          set -euo pipefail
+          aws s3api put-object \
+            --bucket "$SITE_BUCKET" \
+            --key index.html \
+            --body web/index.html \
+            --content-type 'text/html; charset=utf-8' \
+            --cache-control 'no-cache' \
+            --metadata "commit=${GITHUB_SHA}" > /dev/null
+      - name: Verify the public page matches this release
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error --max-time 15 "${WEBSITE_URL}/" -o /tmp/deployed-index.html \
+               && cmp -s web/index.html /tmp/deployed-index.html; then
+              echo "Verified release ${GITHUB_SHA} at ${WEBSITE_URL}"
+              exit 0
+            fi
+            echo "Page not yet verified; retry ${attempt}/12."
+            sleep 10
+          done
+          echo "Deployment verification failed." >&2
+          exit 1

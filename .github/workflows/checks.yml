@@ -1,0 +1,26 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.10.5
+      - name: Check formatting
+        run: terraform fmt -check -recursive terraform
+      - name: Initialize without accessing state
+        working-directory: terraform/site
+        run: terraform init -backend=false -lockfile=readonly
+      - name: Validate infrastructure
+        working-directory: terraform/site
+        run: terraform validate
