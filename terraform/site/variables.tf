@@ -53,12 +53,12 @@ variable "site_bucket_name" {
 # role created in main.tf.
 # ---------------------------------------------------------------------------
 variable "github_repository" {
-  description = "GitHub repository in owner/name form."
+  description = "GitHub repository as GitHub puts it in the OIDC subject: owner/name, or owner@ownerId/name@repoId."
   type        = string
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
-    error_message = "Use a GitHub repository name in owner/name form."
+    condition     = can(regex("^[A-Za-z0-9_.-]+(@[0-9]+)?/[A-Za-z0-9_.-]+(@[0-9]+)?$", var.github_repository))
+    error_message = "Use owner/name, or owner@ownerId/name@repoId as shown in the OIDC subject."
   }
 }
 
