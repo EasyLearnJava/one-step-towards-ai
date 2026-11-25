@@ -165,7 +165,12 @@ without `-WhatIf`:
 .\scripts\bootstrap-state.ps1 -Environment staging -Region us-east-1 -ExpectedAccountId "123456789012" -WhatIf
 ```
 
-The script refuses to run if `backend.hcl` already exists.
+If `backend.hcl` already exists, the script creates nothing new. It checks
+the bucket named there and prints each setting as `[OK]` (already applied) or
+`[MISSING]`; it applies only the missing ones after you confirm, and changes
+nothing when everything is already applied. It never creates a second bucket
+or rewrites `backend.hcl`, so it is also a safe way to check an existing
+state bucket.
 
 ### If bucket creation is denied by a service control policy
 

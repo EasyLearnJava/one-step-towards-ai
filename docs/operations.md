@@ -44,11 +44,11 @@ When the account and region are correct, run the same command **without `-WhatIf
 .\scripts\bootstrap-state.ps1 -Environment staging -Region us-east-1 -ExpectedAccountId "123456789012"
 ```
 
-The script generates a unique bucket name; blocks public access; enables versioning and AES256 default encryption; adds a TLS-only bucket policy; verifies those settings and the region; then writes `terraform\environments\staging\backend.hcl`. It will not overwrite an existing backend configuration. The AWS CLI must have permissions for STS and the corresponding S3 create, put and get operations. This is separate from Terraform and can incur S3 charges. Terraform's S3 backend supplies encryption and lock-file settings from `versions.tf`.
+The script generates a unique bucket name; blocks public access; enables versioning and AES256 default encryption; adds a TLS-only bucket policy; verifies those settings and the region; then writes `terraform\environments\staging\backend.hcl`. If `backend.hcl` already exists, the script creates nothing new: it checks the bucket named there (owner account, region, public access block, versioning, encryption, HTTPS-only policy), prints each one as `[OK]` already applied or `[MISSING]`, and applies only the missing settings after you confirm. When everything is already applied it changes nothing. It never overwrites an existing backend configuration. The AWS CLI must have permissions for STS and the corresponding S3 create, put and get operations. This is separate from Terraform and can incur S3 charges. Terraform's S3 backend supplies encryption and lock-file settings from `versions.tf`.
 
 The script checks the AWS account against the supplied ID and uses the credentials already selected in your shell; it never asks for keys. If creation or verification fails, it reports the bucket name that **may** exist. Inspect the account, bucket and any backend file before retrying or cleaning up; it never deletes a partial bucket automatically. Restrict IAM access to the state bucket separately, and do not share or commit Terraform state.
 
-**Alternative:** If you already have an approved state bucket, do not run the bootstrap. Copy `backend.example.hcl` to `backend.hcl` and configure the existing bucket, key and region manually.
+**Alternative:** If you already have an approved state bucket, copy `backend.example.hcl` to `backend.hcl` and configure the existing bucket, key and region manually. Then you can run the bootstrap with `-WhatIf` to check that bucket's settings without changing anything.
 
 ### Configure the site
 
