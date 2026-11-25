@@ -18,14 +18,29 @@ resources; a failed deployment can still leave billable resources behind.
 
    Check the account before continuing; do not share credentials.
 2. Resolve any CloudFront account-verification requirement with AWS Support.
-   The organization must also permit the necessary monitoring operations in
-   `us-east-1`: Route 53 health-check metrics and this project's SNS topic and
-   CloudWatch alarm use that region.
+   A new account can fail with "Your account must be verified before you can
+   add new CloudFront resources". Open a case under **Account and billing >
+   Account Activation > Account Verification** and wait until it is resolved
+   before applying.
+
+   The organization must also permit this project's operations in
+   `us-east-1`. Route 53 health-check metrics exist only there, so the SNS
+   topic and CloudWatch alarm must be there too, and this guide also puts the
+   website bucket there. If a region-restriction SCP allows only global
+   services in `us-east-1`, this project needed these actions added to its
+   exempted list (`NotAction`), besides CloudFront, IAM and Route 53:
+   `s3:*`, `sns:*`, `cloudwatch:PutMetricAlarm`, `cloudwatch:DeleteAlarms`,
+   `cloudwatch:TagResource` and `cloudwatch:UntagResource`. See
+   [If bucket creation is denied by a service control policy](#if-bucket-creation-is-denied-by-a-service-control-policy)
+   for how to request the change.
 3. In IAM, open **Identity providers**. Reuse the provider for
    `https://token.actions.githubusercontent.com` if present; its audience
    must include `sts.amazonaws.com`. Otherwise, create an **OpenID Connect**
-   provider using that URL and audience. Copy its ARN. An account can have
-   only one provider for this URL; it may be shared with other projects.
+   provider using that URL and audience. Copy its ARN; it has the form
+   `arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com`.
+   This is not the deploy role ARN that Terraform outputs later. An account
+   can have only one provider for this URL; it may be shared with other
+   projects.
 
 ## 2. Prepare the Terraform state bucket
 
@@ -149,10 +164,34 @@ this from the repository root:
 Copy-Item .\terraform\environments\staging\site.example.tfvars .\terraform\environments\staging\site.tfvars
 ```
 
-Edit `site.tfvars` and set `aws_region = "us-east-1"`,
-`environment = "staging"`, a globally unique website bucket name, the
-repository above, the OIDC provider ARN, and an alert email address. S3 bucket
-names cannot contain underscores.
+Edit `site.tfvars` and replace every example value:
+
+| Setting | Value |
+|---|---|
+| `aws_region` | `us-east-1` |
+| `environment` | `staging` |
+| `site_bucket_name` | A globally unique website bucket name (see below) |
+| `github_repository` | `EasyLearnJava@6612328/one-step-towards-ai@1470924284` |
+| `github_oidc_provider_arn` | The provider ARN copied in section 1 |
+| `alert_email` | A real mailbox you can read |
+
+`github_repository` must match the subject GitHub puts in its OIDC token
+exactly. This repository's tokens include the owner and repository IDs:
+`repo:EasyLearnJava@6612328/one-step-towards-ai@1470924284:environment:staging`.
+With the plain `EasyLearnJava/one-step-towards-ai` form, every deployment
+fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity". For
+another repository, open `https://api.github.com/repos/OWNER/REPO` and use
+`owner.id` and `id`.
+
+Two mistakes still apply cleanly but break later:
+
+- Leaving the example account `123456789012` in `github_oidc_provider_arn`
+  makes every deployment fail the same way. Pasting the deploy role ARN there
+  instead is rejected by AWS with `MalformedPolicyDocument`.
+- Leaving `replace@example.com` in `alert_email` leaves the SNS subscription
+  in `PendingConfirmation`, so alerts never arrive.
+
+S3 bucket names cannot contain underscores.
 
 The `site_bucket_name` is for the website bucket that Terraform creates during
 apply. It must be different from the state bucket created earlier. The
@@ -199,8 +238,21 @@ subscription email to receive alerts.
 
 ## 4. Publish using GitHub Actions
 
-Push the project to the intended repository. Create a GitHub environment named
-`staging`, restrict it to `main`, and set these environment variables:
+Push the project to the intended repository. GitHub runs workflows only from
+`.github/workflows` at the repository root.
+
+Create the `staging` environment and restrict it to `main`:
+
+1. In the repository, open **Settings > Environments > New environment**,
+   enter `staging`, and select **Configure environment**.
+2. Under **Deployment branches and tags**, change **No restriction** to
+   **Selected branches and tags**.
+3. Select **Add deployment branch or tag rule**, keep **Ref type: Branch**,
+   enter `main`, and select **Add rule**. The page then shows
+   "1 branch and 0 tags allowed".
+4. Under **Environment variables**, select **Add environment variable** once
+   for each row below. Add them to the environment, not as repository
+   variables.
 
 | Variable | Value |
 |---|---|
@@ -209,10 +261,42 @@ Push the project to the intended repository. Create a GitHub environment named
 | `WEBSITE_URL` | Terraform output `website_url`, without a trailing slash |
 | `AWS_ROLE_ARN` | Terraform output `deploy_role_arn` |
 
-In **Actions > Deploy website**, select `main` and `staging`, then run the
-workflow. It uploads `web/index.html` and verifies the public response. Open
-the CloudFront URL and check the health alarm and confirmed email subscription.
+Until the first deployment, the CloudFront URL returns `403 Forbidden`. That
+is expected: the website bucket has no `index.html` yet.
+
+In **Actions > Deploy website**, select **Run workflow**, keep `main` and
+`staging`, then select **Run workflow** in the form. It uploads
+`web/index.html` and verifies the public response. After pushing a fix, start
+a new run rather than **Re-run jobs**: a re-run reuses the earlier commit, and
+a production deployment requires the same commit to have succeeded in
+staging.
+
+Then check, in `us-east-1` for the AWS items:
+
+1. The CloudFront URL shows the page.
+2. CloudWatch **Alarms** shows `one-step-staging-unavailable` as **OK**. It
+   can take a few minutes after the first deployment.
+3. SNS **Topics > one-step-staging-alerts > Subscriptions** shows the email
+   as **Confirmed**. If it shows `PendingConfirmation`, select the link in
+   the AWS confirmation email.
+
 Deployments are manual, not automatic on push.
+
+### If the deployment fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity"
+
+GitHub reached AWS, but the deploy role's trust policy rejected its token.
+
+1. Check that `github_oidc_provider_arn` in `site.tfvars` is this account's
+   provider from section 1, not the example account or the role ARN.
+2. Check that `github_repository` matches what GitHub sent. In CloudTrail
+   (`us-east-1`), open **Event history**, filter **Event name** by
+   `AssumeRoleWithWebIdentity`, and open a failed event. Its
+   `userIdentity.userName` is the exact subject, such as
+   `repo:EasyLearnJava@6612328/one-step-towards-ai@1470924284:environment:staging`.
+   The part between `repo:` and `:environment:` is the value
+   `github_repository` needs.
+3. Correct `site.tfvars`, create and review a fresh plan (only the deploy
+   role's trust policy should change), apply it, and start a new run.
 
 ## 5. Clean up safely
 
