@@ -204,8 +204,8 @@
       <tr><td><a href="#s24">2.4</a></td><td>Docker image with the Lambda Web Adapter</td><td><span class="chip pc">Your PC</span><span class="chip dk">Docker</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s25">2.5</a></td><td>GitHub runs the tests and builds the image</td><td><span class="chip gh">GitHub</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s26">2.6</a></td><td>ECR repository in us-east-2; staging rebuilt</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
-      <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">code ready: your turn to run</span></td></tr>
-      <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">fixed: run image only once more</span></td></tr>
+      <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip todo">code ready: your turn to apply</span></td></tr>
       <tr><td><a href="#s29">2.9</a></td><td>CloudFront route <code>/api/*</code> to Lambda</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s210">2.10</a></td><td>Deploy workflow updates the function</td><td><span class="chip gh">GitHub</span><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
@@ -666,7 +666,8 @@ git push</code></pre>
 
 <section class="sec" id="s27">
   <div class="sketch alt" style="--c: var(--gh)">
-    <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip todo">code ready: your turn to run</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
+    <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip todo">fixed: run image only once more</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
+    <div class="warn"><b>What happened on the first run:</b> the image for commit <code>fb5a197</code> arrived, but as <b>three</b> ECR entries: a tagged <i>image index</i>, the real image (untagged, about 65 MB) and a small untagged <i>attestation</i>. GitHub's Docker builder adds a provenance attestation by default, which turns the push into an index. Lambda does not accept an index, and the keep-5 rule would count the parts separately. <b>Fix:</b> the workflow now builds with <code>--provenance=false</code>, which pushes one plain image. <b>Run "image only" once more</b> (steps below) after the fix is on <code>main</code>. The three old entries are harmless; the lifecycle rule removes them over time, or delete them in the console.</div>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>A new <code>image</code> job in the <b>Deploy website</b> workflow: builds the image on Linux, tags it with the commit SHA, pushes it to ECR, and checks it arrived. A new run option, <b>image only</b>, stops after the push.</div>
       <div class="w-why"><b class="l">WHY</b>The Lambda function (2.8) can only be created from an image that already exists in ECR. "Image only" is needed because the function does not exist yet.</div>
@@ -690,7 +691,7 @@ git push</code></pre>
     <div class="tablewrap"><table>
       <tr><th>Check</th><th>Where</th><th>Expected</th></tr>
       <tr><td>Run is green</td><td><span class="path">Actions &rsaquo; the run</span></td><td><code>image</code> green, last line <i>Image &lt;SHA&gt; is in ECR.</i>; <code>deploy</code> skipped</td></tr>
-      <tr><td>Image in ECR</td><td>Console, region <b>us-east-2</b>: <span class="path">ECR &rsaquo; one-step-staging-api &rsaquo; Images</span></td><td>One image; its tag is the full commit SHA</td></tr>
+      <tr><td>Image in ECR</td><td>Console, region <b>us-east-2</b>: <span class="path">ECR &rsaquo; one-step-staging-api &rsaquo; Images</span></td><td>The newest entry is tagged with the full commit SHA, about 65 MB, artifact type <b>Image</b> (not Image Index), and has <b>no</b> untagged twin pushed at the same second</td></tr>
       <tr><td>Scan result</td><td>The image &rsaquo; <span class="path">Vulnerabilities</span></td><td>A scan report (findings in the Debian base image are normal; nothing to act on yet)</td></tr>
     </table></div>
 <pre><code><span class="c"># Same check from PowerShell</span>
@@ -820,12 +821,90 @@ aws ecr describe-images --region us-east-2 --repository-name one-step-staging-ap
 
 <section class="sec" id="s28">
   <div class="sketch" style="--c: var(--orange)">
-    <h2><span class="num" style="--c: var(--orange)">2.8</span>The Lambda function <span class="chip todo">planned</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span></h2>
+    <h2><span class="num" style="--c: var(--orange)">2.8</span>The Lambda function <span class="chip todo">code ready: your turn</span><span class="chip once">ONE TIME</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
     <div class="wwy">
-      <div class="w-what"><b class="l">WHAT</b>Execution role (logs only), log group (14 days), function from the image (<code>package_type = "Image"</code>, x86_64, reserved concurrency 5, later image changes ignored), function URL with <code>AWS_IAM</code> auth. GitHub variables <code>API_FUNCTION_NAME</code> and <code>API_REGION</code>.</div>
-      <div class="w-why"><b class="l">WHY</b>This is where the API runs. The role can only write logs, nothing else.</div>
-      <div class="w-see"><b class="l">YOU'LL SEE</b>The function is <b>Active</b> in the Lambda console (us-east-2), and calling its URL directly returns <b>403</b>.</div>
+      <div class="w-what"><b class="l">WHAT</b>The Lambda function <code>one-step-staging-api</code> in us-east-2, running the newest image from ECR, with its log group, execution role and a <b>private</b> function URL.</div>
+      <div class="w-why"><b class="l">WHY</b>This is where the API runs on AWS. It starts only when a request arrives, so there is no server to look after.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b><i>Apply complete! Resources: 5 added</i>, the function <b>Active</b> in the Lambda console (us-east-2), and <b>403</b> when you call its URL directly.</div>
     </div>
+
+    <h3>What Terraform adds (in <code>terraform/site/api.tf</code>)</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Resource</th><th>Settings</th><th>Why</th></tr>
+      <tr><td>Starting image (data source, not a resource)</td><td>The <b>newest</b> image in <code>one-step-staging-api</code>, pinned by its digest</td><td>No image tag to type into <code>site.tfvars</code>. A later push cannot change the function behind your back.</td></tr>
+      <tr><td><code>aws_cloudwatch_log_group.api</code></td><td><code>/aws/lambda/one-step-staging-api</code>, kept <b>14 days</b></td><td>Created before the function, so Lambda does not make one that keeps logs forever.</td></tr>
+      <tr><td><code>aws_iam_role.api</code> + <code>aws_iam_role_policy.api_logs</code></td><td>Role <code>one-step-staging-api</code>; may only write to that log group</td><td>Least privilege: the function cannot touch S3, ECR or anything else. Step 3 adds what the AI calls need.</td></tr>
+      <tr><td><code>aws_lambda_function.api</code></td><td>Image, x86_64, 512 MB, 15 s timeout, <b>reserved concurrency 5</b>, image changes ignored by Terraform</td><td>x86_64 matches GitHub's build. 512 MB also buys CPU for a faster cold start. Five at once caps cost and abuse. The Deploy workflow ships new code (2.10), so Terraform must not roll it back.</td></tr>
+      <tr><td><code>aws_lambda_function_url.api</code></td><td>Auth type <code>AWS_IAM</code></td><td>Every call must be signed by an allowed AWS identity. Nobody is allowed yet; 2.9 allows only CloudFront.</td></tr>
+    </table></div>
+    <div class="ok"><b>Checked before handing over:</b> <code>terraform fmt</code> and <code>validate</code> pass; the locked AWS provider (5.100.0) supports "most recent image"; read-only calls confirmed Lambda and CloudWatch Logs work in us-east-2 under the region rule, and that no role or log group with these names exists. The Lambda Web Adapter 1.1.0 reads the image's <code>PORT=8000</code> (a supported fallback for <code>AWS_LWA_PORT</code>) and checks <code>/api/health</code> before sending requests.</div>
+
+    <h3>Step A &middot; Order matters</h3>
+    <ol class="steps" style="--c: var(--orange)">
+      <li>The <code>--provenance=false</code> fix is on <code>main</code> and <b>Checks</b> is green.</li>
+      <li>You ran <b>Deploy website</b> with <b>image only</b> again (2.7), so the newest ECR entry is one plain image.</li>
+      <li><b>Only then</b> plan and apply. Terraform takes the newest image; if that is still the old image index, creating the function fails.</li>
+    </ol>
+
+    <h3>Step B &middot; Plan and apply <span class="chip pc">Your PC</span><span class="chip manual">changes AWS</span></h3>
+    <div class="check"><b class="hd">Check first:</b> <code>aws sts get-caller-identity</code> shows the workload account, and <code>terraform state list</code> shows the 17 resources from 2.6.</div>
+<pre><code><span class="c"># From the project root</span>
+aws sts get-caller-identity
+Set-Location .\terraform\site
+terraform init -reconfigure "-backend-config=..\environments\staging\backend.hcl"
+terraform state list                <span class="c"># 17 lines</span>
+terraform plan "-var-file=..\environments\staging\site.tfvars" "-out=staging.tfplan"
+<span class="g"># Plan: 5 to add, 0 to change, 0 to destroy.</span>
+terraform apply staging.tfplan
+<span class="g"># Apply complete! Resources: 5 added, 0 changed, 0 destroyed.</span>
+terraform output
+Set-Location ..\..</code></pre>
+    <h3>What to look for in the plan</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Look for</th><th>Expected</th></tr>
+      <tr><td>Total</td><td><b>5 to add, 0 to change, 0 to destroy</b>: log group, role, role policy, function, function URL. Nothing of version 1 or the ECR repository changes.</td></tr>
+      <tr><td><code>image_uri</code></td><td><code>****.dkr.ecr.us-east-2.amazonaws.com/one-step-staging-api@sha256:...</code> (a digest, not a tag)</td></tr>
+      <tr><td>Function settings</td><td><code>package_type = "Image"</code>, <code>architectures = ["x86_64"]</code>, <code>reserved_concurrent_executions = 5</code></td></tr>
+      <tr><td>Function URL</td><td><code>authorization_type = "AWS_IAM"</code> (never <code>NONE</code>)</td></tr>
+    </table></div>
+    <div class="warn">Anything else, especially a <b>change</b> or <b>destroy</b>? Do <b>not</b> apply; check first.</div>
+    <h3>New outputs</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Output</th><th>Looks like</th><th>Used for</th></tr>
+      <tr><td><code>api_function_name</code></td><td><code>one-step-staging-api</code></td><td>GitHub <code>API_FUNCTION_NAME</code></td></tr>
+      <tr><td><code>api_region</code></td><td><code>us-east-2</code></td><td>GitHub <code>API_REGION</code></td></tr>
+      <tr><td><code>api_function_url</code></td><td><code>https://****.lambda-url.us-east-2.on.aws/</code></td><td>The 403 check below, and CloudFront in 2.9</td></tr>
+    </table></div>
+
+    <h3>Step C &middot; GitHub variables <span class="chip gh">GitHub</span><span class="chip manual">MANUAL</span></h3>
+    <ol class="steps" style="--c: var(--gh)">
+      <li><span class="path">Settings &rsaquo; Environments &rsaquo; staging &rsaquo; Environment variables</span>.</li>
+      <li><b>Add variable</b> <code>API_FUNCTION_NAME</code> = <code>api_function_name</code>.</li>
+      <li><b>Add variable</b> <code>API_REGION</code> = <code>api_region</code>.</li>
+    </ol>
+    <p>The <code>staging</code> environment then has six variables: <code>AWS_ROLE_ARN</code>, <code>SITE_BUCKET</code>, <code>WEBSITE_URL</code>, <code>API_ECR_REPOSITORY</code>, <code>API_FUNCTION_NAME</code>, <code>API_REGION</code> (plus <code>AWS_REGION</code> from version 1, if you set it there).</p>
+
+    <h3>Step D &middot; Check it worked</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Check</th><th>Where</th><th>Expected</th></tr>
+      <tr><td>Function is ready</td><td>Console, <b>us-east-2</b>: <span class="path">Lambda &rsaquo; Functions &rsaquo; one-step-staging-api</span></td><td>State <b>Active</b>, package type <b>Image</b>, reserved concurrency <b>5</b></td></tr>
+      <tr><td>URL is private</td><td>PowerShell, below</td><td><b>403</b> <code>Forbidden</code></td></tr>
+      <tr><td>The code runs on Lambda</td><td>Lambda console &rsaquo; <span class="path">Test</span>, or the PowerShell invoke below</td><td><code>statusCode</code> 200 and the health JSON with the commit SHA</td></tr>
+      <tr><td>Logs arrive</td><td><span class="path">CloudWatch &rsaquo; Log groups &rsaquo; /aws/lambda/one-step-staging-api</span></td><td>uvicorn's start-up lines and the test request</td></tr>
+    </table></div>
+<pre><code><span class="c"># 1. Direct call to the function URL: must be refused</span>
+curl.exe -sS -o NUL -w "%{http_code}`n" "&lt;api_function_url&gt;api/health"     <span class="g"># 403</span>
+
+<span class="c"># 2. Invoke it with your own AWS login (signed, so it is allowed): a fake</span>
+<span class="c">#    function-URL request for GET /api/health</span>
+'{"version":"2.0","routeKey":"$default","rawPath":"/api/health","rawQueryString":"","headers":{"host":"test"},"requestContext":{"accountId":"anonymous","apiId":"test","domainName":"test","domainPrefix":"test","http":{"method":"GET","path":"/api/health","protocol":"HTTP/1.1","sourceIp":"127.0.0.1","userAgent":"test"},"requestId":"test","routeKey":"$default","stage":"$default","time":"26/Nov/2026:00:00:00 +0000","timeEpoch":0},"isBase64Encoded":false}' |
+  Out-File -Encoding ascii "$env:TEMP\health-event.json"
+aws lambda invoke --region us-east-2 --function-name one-step-staging-api `
+  --cli-binary-format raw-in-base64-out --payload "fileb://$env:TEMP\health-event.json" "$env:TEMP\health-out.json"
+Get-Content "$env:TEMP\health-out.json"
+<span class="g"># {"statusCode":200, ... "body":"{\"status\":\"ok\",\"version\":\"&lt;commit SHA&gt;\"}" ...}</span></code></pre>
+    <div class="note"><b>The first call is slower</b> (a "cold start": Lambda starts the container, the adapter waits for <code>/api/health</code>). Later calls within a few minutes reuse the running copy. The <b>Init Duration</b> in the log's <code>REPORT</code> line shows the cold-start time.</div>
+    <div class="warn"><b>If creating the function fails</b> with <i>image manifest, config or layer media type ... is not supported</i>: the newest ECR entry is still the old image index. Run "image only" again (Step A), then plan and apply again. <b>If the invoke shows status 502 or a timeout:</b> open the log group; the adapter's or uvicorn's error is there.</div>
   </div>
 </section>
 
@@ -884,7 +963,7 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
       <tr><td><code>pyproject.toml</code></td><td>pytest settings only</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>.github/workflows/checks.yml</code></td><td>New <code>api</code> job: tests, image build, start-up check (2.5)</td><td><span class="chip done">on main</span></td></tr>
-      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and its lifecycle rule (2.6)</td><td><span class="chip done">on main, applied</span></td></tr>
+      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and its lifecycle rule (2.6, applied); Lambda function, log group, execution role, function URL (2.8)</td><td><span class="chip done">on main</span> <span class="chip todo">2.8 part not applied yet</span></td></tr>
       <tr><td><code>terraform/site/versions.tf</code>, <code>main.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider, ECR push rights for the deploy role, new outputs (2.6)</td><td><span class="chip done">on main, applied</span></td></tr>
       <tr><td><code>.github/workflows/deploy.yml</code></td><td>New <code>image</code> job and the "image only" option (2.7)</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on main</span> (updated for 2.5 and 2.6)</td></tr>
@@ -903,6 +982,7 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
       <tr><td><code>uvicorn --reload</code> prints <i>Reloading...</i> and keeps serving old code</td><td>On Windows, uvicorn restarts its worker with a Ctrl+C console signal; a server started in the background without a console never receives it</td><td>Stop the server and start it again. In your own terminal, <code>--reload</code> normally works.</td></tr>
       <tr><td>pytest warning: <code>Using httpx with starlette.testclient is deprecated; install httpx2</code></td><td>Starlette changed its test client's HTTP library</td><td><code>httpx2</code> in <code>requirements-dev.txt</code>.</td></tr>
       <tr><td><code>/docs</code>, <code>/redoc</code>, <code>/openapi.json</code> answer 200</td><td>FastAPI adds these pages by default</td><td><code>FastAPI(docs_url=None, redoc_url=None, openapi_url=None)</code>.</td></tr>
+      <tr><td>ECR shows 3 entries for one push: a tagged <i>Image Index</i>, an untagged image and a tiny untagged attestation</td><td>GitHub's Docker builder adds a provenance attestation by default, so the push becomes an image index. Lambda rejects image indexes.</td><td><code>docker build --provenance=false</code> in the Deploy workflow, then push again (<a href="#s27">2.7</a>).</td></tr>
       <tr><td><code>docker run -p 8000:8000</code> fails: port in use</td><td>The dev server already uses 8000</td><td>Map another port: <code>-p 8001:8000</code>.</td></tr>
       <tr><td>Commits made as the wrong person</td><td>The global Git identity differs from this repository's</td><td>Commit with this repository's own <code>user.name</code> and <code>user.email</code>; check <code>git log --format="%an %ae"</code> before pushing.</td></tr>
     </table></div>

@@ -182,17 +182,24 @@ GitHub in 2.5), and if run locally with
       it with the commit SHA and pushes it to ECR, then checks the tag is in
       ECR. A run option ("image only") stops after the push, because the
       function does not exist yet. The page job now runs after it.
-- [ ] You: run Deploy website on `main`, `staging`, image only ticked.
+- [x] You: run Deploy website on `main`, `staging`, image only ticked.
+      Pushed `fb5a197`, but as an image index plus an attestation (3 ECR
+      entries): GitHub's builder adds provenance by default, and Lambda
+      rejects image indexes. Fixed with `docker build --provenance=false`.
+- [ ] You: run image only once more, so ECR gets one plain image.
 
 **Done when:** ECR lists an image tagged with the commit SHA.
 
 ### 2.8 AWS part 2: the Lambda function (you run Terraform)
 
-- [ ] Terraform: execution role (logs only), log group (14 days), Lambda
+- [x] Terraform: execution role (logs only), log group (14 days), Lambda
       function from the image (`package_type = "Image"`, `ignore_changes` on
-      the image), reserved concurrency 5, function URL (`AWS_IAM`).
-- [ ] Outputs: function name and region; GitHub variables
-      `API_FUNCTION_NAME` and `API_REGION` on `staging`.
+      the image), reserved concurrency 5, function URL (`AWS_IAM`). The
+      starting image is the newest one in ECR, pinned by digest. x86_64,
+      512 MB, 15 s timeout. In `terraform/site/api.tf`; 22 resources total.
+- [x] Outputs: `api_function_name`, `api_region`, `api_function_url`.
+- [ ] You: plan and apply (5 to add), after the image-only re-run above.
+- [ ] GitHub variables `API_FUNCTION_NAME` and `API_REGION` on `staging`.
 
 **Done when:** the function shows as Active in the Lambda console
 (us-east-2), and calling the function URL directly returns 403.
