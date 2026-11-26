@@ -1,3 +1,6 @@
+# Runs on every pull request and every push to main. Checks the repository
+# rules (scripts/check-repo.sh), Terraform formatting and validity, and that the
+# PowerShell scripts parse in Windows PowerShell 5.1. It never contacts AWS.
 name: Checks
 
 on:
@@ -11,8 +14,11 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check repository rules
+        run: bash scripts/check-repo.sh
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: 1.10.5
@@ -24,3 +30,24 @@ jobs:
       - name: Validate infrastructure
         working-directory: terraform/site
         run: terraform validate
+
+  scripts:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Parse scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($file in Get-ChildItem -Path scripts -Filter *.ps1) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
+            foreach ($parseError in $parseErrors) {
+              Write-Host "$($file.Name):$($parseError.Extent.StartLineNumber): $($parseError.Message)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+          Write-Host "All scripts parse in Windows PowerShell $($PSVersionTable.PSVersion)."

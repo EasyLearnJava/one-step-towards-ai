@@ -2,7 +2,7 @@
 
 These instructions use Windows PowerShell, an S3 state bucket and website
 bucket in N. Virginia (`us-east-1`), and the GitHub repository
-`EasyLearnJava/one-step-towards-ai`. Commands start at the repository root
+`<owner>/<repo>`. Commands start at the repository root
 unless stated otherwise. Review costs and permissions before creating AWS
 resources; a failed deployment can still leave billable resources behind.
 
@@ -227,16 +227,16 @@ Edit `site.tfvars` and replace every example value:
 | `aws_region` | `us-east-1` |
 | `environment` | `staging` |
 | `site_bucket_name` | A globally unique website bucket name (see below) |
-| `github_repository` | `EasyLearnJava@6612328/one-step-towards-ai@1470924284` |
+| `github_repository` | `<owner>@<owner-id>/<repo>@<repo-id>` |
 | `github_oidc_provider_arn` | The provider ARN copied in section 1, step 4 |
 | `alert_email` | A real mailbox you can read |
 
 `github_repository` must match the subject GitHub puts in its OIDC token
 exactly. This repository's tokens include the owner and repository IDs:
-`repo:EasyLearnJava@6612328/one-step-towards-ai@1470924284:environment:staging`.
-With the plain `EasyLearnJava/one-step-towards-ai` form, every deployment
-fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity". For
-another repository, open `https://api.github.com/repos/OWNER/REPO` and use
+`repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:staging`.
+With the plain `<owner>/<repo>` form, every deployment
+fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity". To find
+the IDs, open `https://api.github.com/repos/<owner>/<repo>` and use
 `owner.id` and `id`.
 
 Two mistakes still apply cleanly but break later:
@@ -303,8 +303,8 @@ and review a fresh plan rather than reusing the failed plan.
 
 Push the project to the intended repository. GitHub runs workflows only from
 `.github/workflows` at the repository root. Each push to `main` runs the
-**Checks** workflow, which validates the Terraform files and never touches
-AWS.
+**Checks** workflow: repository rules, Terraform formatting and validation,
+and a Windows PowerShell 5.1 parse of the scripts. It never touches AWS.
 
 Create the `staging` environment and restrict it to `main`:
 
@@ -359,7 +359,7 @@ GitHub reached AWS, but the deploy role's trust policy rejected its token.
    `us-east-1`. Change the lookup attribute to **Event name**, enter
    `AssumeRoleWithWebIdentity`, and open a failed event. In its event record,
    `userIdentity.userName` is the exact subject, such as
-   `repo:EasyLearnJava@6612328/one-step-towards-ai@1470924284:environment:staging`.
+   `repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:staging`.
    The part between `repo:` and `:environment:` is the value
    `github_repository` needs.
 3. Correct `site.tfvars`, create and review a fresh plan (only the deploy
@@ -419,11 +419,11 @@ Only if the plan contains the intended resources, run:
 terraform apply "staging-destroy.tfplan"
 ```
 
-Verify the resulting state and AWS resources; a failed apply can leave
-resources not represented in state. Follow
+Verify the resulting state and AWS resources: the apply must end with
+`15 destroyed`, and `terraform state list` must then show no site resources.
+A failed apply can leave resources not represented in state; after a partial
+apply, inspect the state and AWS resources directly. Follow
 the [full teardown checklist](operations.md#7-teardown-and-verify-one-environment).
-Its inventory checker expects a complete deployment, so it may not work after
-a partial apply; inspect the state and AWS resources directly in that case.
 
 Keep the state bucket, OIDC provider and the SCP entries from section 1 if
 other projects may use them. Remove local `backend.hcl`, `site.tfvars`, and

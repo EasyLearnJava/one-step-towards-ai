@@ -26,7 +26,8 @@ $ErrorActionPreference = "Stop"
 $Environment = $Environment.ToLowerInvariant()
 $Region = $Region.ToLowerInvariant()
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$backendPath = Join-Path $projectRoot "terraform\environments\$Environment\backend.hcl"
+# Nested Join-Path keeps the path valid on Windows and in PowerShell 7 elsewhere.
+$backendPath = Join-Path $projectRoot (Join-Path "terraform" (Join-Path "environments" (Join-Path $Environment "backend.hcl")))
 $defaultKey = "one-step-at-a-time/$Environment/terraform.tfstate"
 $ownerArgs = @("--expected-bucket-owner", $ExpectedAccountId)
 
@@ -35,13 +36,18 @@ function Invoke-AwsRaw {
     # expected answers such as "no bucket policy" can be handled. Windows
     # PowerShell 5.1 turns redirected stderr into a terminating error under
     # "Stop", so this function uses "Continue" for its own scope only.
+    # On success Text is stdout only, so a CLI warning on stderr cannot break
+    # the JSON; on failure it is stderr followed by stdout.
     param([string[]]$Arguments)
 
     $ErrorActionPreference = "Continue"
     $output = & aws @Arguments --region $Region --output json --no-cli-pager 2>&1
     $code = $LASTEXITCODE
-    # "$_" also turns stderr records into text and copes with no output at all.
-    $text = (@($output) | ForEach-Object { "$_" }) -join [Environment]::NewLine
+    # "$_" turns stderr records into text and copes with no output at all.
+    $stdout = @($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
+    $stderr = @($output | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
+    $text = $stdout -join [Environment]::NewLine
+    if ($code -ne 0) { $text = ($stderr + $stdout) -join [Environment]::NewLine }
     return [pscustomobject]@{ ExitCode = $code; Text = $text }
 }
 
@@ -79,7 +85,9 @@ function Get-BucketRegion {
 
 function Test-TlsOnlyPolicy {
     # True when the policy has a Deny for all principals and all S3 actions on
-    # the bucket and its objects whenever aws:SecureTransport is false.
+    # the bucket and its objects whenever aws:SecureTransport is false. Any
+    # extra condition would narrow the Deny, so aws:SecureTransport must be its
+    # only condition.
     param($Policy, [string]$Bucket)
 
     $needed = @("arn:aws:s3:::$Bucket", "arn:aws:s3:::$Bucket/*")
@@ -87,7 +95,9 @@ function Test-TlsOnlyPolicy {
         if ($statement.Effect -ne "Deny") { continue }
         $allPrincipals = ($statement.Principal -eq "*") -or ($statement.Principal.AWS -eq "*")
         $secure = $null
-        if ($statement.Condition -and $statement.Condition.Bool) {
+        if ($statement.Condition -and $statement.Condition.Bool -and
+            @($statement.Condition.PSObject.Properties).Count -eq 1 -and
+            @($statement.Condition.Bool.PSObject.Properties).Count -eq 1) {
             $secure = $statement.Condition.Bool."aws:SecureTransport"
         }
         $resources = @($statement.Resource)
@@ -212,7 +222,7 @@ function Set-BucketSettings {
             $statements = @(@($State.Policy.Statement) | Where-Object { $_.Sid -ne "DenyInsecureTransport" })
         }
         $policy = [ordered]@{ Version = $version; Statement = @($statements) + @($tlsStatement) } | ConvertTo-Json -Depth 20 -Compress
-        $policyFile = Join-Path ([System.IO.Path]::GetTempPath()) ("one-step-state-policy-" + [Guid]::NewGuid().ToString("N") + ".json")
+        $policyFile = Join-Path ([System.IO.Path]::GetTempPath()) ("tf-state-policy-" + [Guid]::NewGuid().ToString("N") + ".json")
         try {
             [System.IO.File]::WriteAllText($policyFile, $policy, (New-Object System.Text.UTF8Encoding($false)))
             $null = Invoke-Aws (@("s3api", "put-bucket-policy", "--bucket", $Bucket, "--policy", "file://$policyFile") + $ownerArgs)
@@ -277,11 +287,15 @@ if (Test-Path -LiteralPath $backendPath) {
     if ($key -ne $defaultKey) {
         Write-Host "[INFO]    backend.hcl uses key $key (default would be $defaultKey); keeping it."
     }
+    # Only "not found" means there is no state yet; any other error (for example
+    # access denied) stops the script instead of being reported as "no state".
     $object = Invoke-AwsRaw (@("s3api", "head-object", "--bucket", $bucket, "--key", $key) + $ownerArgs)
     if ($object.ExitCode -eq 0) {
         Write-Host "[INFO]    Terraform state file found at $key"
-    } else {
+    } elseif ($object.Text -match '\((404|NoSuchKey|NotFound)\)') {
         Write-Host "[INFO]    No Terraform state file at $key yet (normal before the first apply)"
+    } else {
+        throw "Could not check the Terraform state file at ${key}. No AWS change was made. Details: $($object.Text)"
     }
 
     $state = Get-BucketState $bucket

@@ -164,6 +164,7 @@
   <a href="#cloudfront">CloudFront verification</a>
   <a href="#scp">Region rule (SCP)</a>
   <a href="#oidc">GitHub login provider</a>
+  <a href="#gh-repo">GitHub repository</a>
   <div class="grp"><span class="dot" style="--c: var(--teal)">3</span>Automated setup</div>
   <a href="#automation">What is automated</a>
   <a href="#state">State bucket: one command</a>
@@ -514,7 +515,7 @@
     <h2>The journey, in 6 stages</h2>
     <div class="journey">
       <div class="sketch st" style="--c: var(--teal)"><span class="n">1</span><b>Prerequisites</b>tools + AWS user<br><span class="chip once">once</span></div>
-      <div class="sketch alt st" style="--c: var(--red)"><span class="n">2</span><b>Manual setup</b>payment, support case, rules<br><span class="chip manual">by hand</span></div>
+      <div class="sketch alt st" style="--c: var(--red)"><span class="n">2</span><b>Manual setup</b>payment, support case, rules, repo<br><span class="chip manual">by hand</span></div>
       <div class="sketch st" style="--c: var(--teal)"><span class="n">3</span><b>Automated setup</b>state bucket script<br><span class="chip auto">1 command</span></div>
       <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>Terraform</b>builds 15 AWS pieces<br><span class="chip auto">4 commands</span></div>
       <div class="sketch st" style="--c: var(--gh)"><span class="n">5</span><b>GitHub deploy</b>uploads the page<br><span class="chip every">1 click</span></div>
@@ -594,7 +595,7 @@ aws sts get-caller-identity  <span class="c"># "Account" must be the workload ac
     <div class="grid">
       <div class="sketch alt card" style="--c: var(--purple)"><h3>Management account</h3><p><b>The owner's office.</b> Owns the organization, pays one combined bill, holds the credits and the rules (SCPs). Open it only for billing and rules.</p></div>
       <div class="sketch card" style="--c: var(--gold)"><h3>Identity delegated admin</h3><p><b>The security desk.</b> Runs IAM Identity Center, which gives you the <code>AccountFullAccessRole</code> sign-in. Nothing to do here.</p></div>
-      <div class="sketch alt card" style="--c: var(--blue)"><h3>Workload account</h3><p><b>The workshop.</b> Everything this project builds lives here (named <b>First Principles</b> in this setup). The CLI and GitHub use it.</p></div>
+      <div class="sketch alt card" style="--c: var(--blue)"><h3>Workload account</h3><p><b>The workshop.</b> Everything this project builds lives here. The CLI and GitHub use it.</p></div>
     </div>
     <ol class="steps" style="--c: var(--purple)">
       <li>Open <code>https://console.aws.amazon.com/</code>: the <span class="path">AWS sign-ins</span> page lists one card per account.</li>
@@ -618,6 +619,7 @@ aws sts get-caller-identity  <span class="c"># "Account" must be the workload ac
       <tr><td><a href="#cloudfront">CloudFront verification</a></td><td>AWS Support decides; no command can lift the hold.</td><td><span class="chip work">Workload</span></td></tr>
       <tr><td><a href="#scp">Region rule (SCP)</a></td><td>It guards <b>every</b> account, lives in the management account, and the workload CLI user cannot change it. Each change should be a conscious decision.</td><td><span class="chip mgmt">Management</span></td></tr>
       <tr><td><a href="#oidc">GitHub login provider</a></td><td>One per account, shared by every project; created once and then reused.</td><td><span class="chip work">Workload</span></td></tr>
+      <tr><td><a href="#gh-repo">GitHub repository</a></td><td>You choose its owner, name and visibility, and you sign in to GitHub yourself to push.</td><td><span class="chip gh">GitHub</span></td></tr>
       <tr><td><a href="#gh-env">GitHub environment and variables</a></td><td>GitHub settings, done once; the values come from Terraform's output.</td><td><span class="chip gh">GitHub</span></td></tr>
       <tr><td><a href="#see-monitor">Confirm the alert email</a></td><td>AWS requires the mailbox owner to click the link.</td><td>Your inbox</td></tr>
       <tr><td><a href="#gh-deploy">Run the deploy</a></td><td>On purpose: releases are a click, so nothing goes live by accident.</td><td><span class="chip gh">GitHub</span></td></tr>
@@ -739,6 +741,45 @@ aws sts get-caller-identity  <span class="c"># "Account" must be the workload ac
   </div>
 </section>
 
+<section class="sec" id="gh-repo">
+  <div class="sketch alt" style="--c: var(--gh)">
+    <h2><span class="num" style="--c: var(--gh)">2f</span>GitHub repository <span class="chip once">ONE TIME</span><span class="chip manual">MANUAL</span><span class="chip gh">GitHub</span><span class="chip pc">Your PC</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>An empty repository on GitHub, and this project pushed into it from your PC.</div>
+      <div class="w-why"><b class="l">WHY</b>The <b>Deploy website</b> workflow runs from it, and in 4a the deploy role is told to trust <b>only</b> this repository, by its numeric IDs. Those IDs exist only once the repository does.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>Your files at <code>https://github.com/&lt;owner&gt;/&lt;repo&gt;</code> and a green <b>Checks</b> run under <b>Actions</b>.</div>
+    </div>
+    <div class="check"><b class="hd">Check first:</b> in the project folder, <code>git remote -v</code> prints <code>https://github.com/&lt;owner&gt;/&lt;repo&gt;.git</code> and that page shows your files? Skip to 3, and note the repository's IDs for 4a.</div>
+    <h3>On GitHub</h3>
+    <ol class="steps" style="--c: var(--gh)">
+      <li><code>git --version</code> prints a version. If not, install Git for Windows from <code>git-scm.com</code> and open a new PowerShell window.</li>
+      <li><code>github.com</code> &rsaquo; <b>+</b> &rsaquo; <b>New repository</b>: choose a name, <b>Public</b>, and leave README, .gitignore and license <b>off</b> (the repository must be empty). <b>Create repository</b>.</li>
+    </ol>
+    <div class="note"><b>Private repository?</b> GitHub environments (5a) then need GitHub Pro or Team. The deploy role trusts only environment sign-ins, so without environments nothing can deploy.</div>
+    <h3>On your PC (Windows PowerShell, in the project root)</h3>
+    <ol class="steps" style="--c: var(--gh)">
+      <li>Go to the project root: the top folder of the project, the one that holds <code>README.md</code>, <code>scripts</code> and <code>terraform</code>.</li>
+      <li>If <code>git status</code> says <i>not a git repository</i>, run <code>git init -b main</code> first.</li>
+      <li>Set the name and email of the GitHub account that should own the commits, for this repository only. This PC's global Git identity may belong to another account, for example a work one.</li>
+      <li>Stage by folder; <code>.gitignore</code> keeps <code>site.tfvars</code>, <code>backend.hcl</code>, state and plans out. If the folder has a <code>.gitattributes</code> file, add it too. Never use <code>git add -A</code>.</li>
+      <li>Read <code>git status --short</code>: only project files, each starting with <code>A</code>. Then commit and push. If a browser window asks you to sign in to GitHub, sign in yourself.</li>
+    </ol>
+<pre><code><span class="c"># 1. Your GitHub name and email, for this repository only</span>
+git config --local user.name "&lt;your name&gt;"
+git config --local user.email "&lt;your GitHub email&gt;"
+<span class="c"># 2. Stage the project by folder, then review</span>
+git add -- .github .gitignore README.md docs scripts terraform web
+git status --short
+<span class="c"># 3. First commit on branch main</span>
+git commit -m "Initial website project"
+git branch -M main
+<span class="c"># 4. Connect to the empty repository and push</span>
+git remote add origin https://github.com/&lt;owner&gt;/&lt;repo&gt;.git
+git push -u origin main</code></pre>
+    <div class="ok">Wait for the <b>Checks</b> run under <b>Actions</b> to turn green. Then find the repository's numeric IDs (<a href="#tfvars">4a, "Where to find @&lt;owner-id&gt; and @&lt;repo-id&gt;"</a>); you need them for <code>github_repository</code>.</div>
+  </div>
+</section>
+
 <!-- ===================== 3 AUTOMATED ===================== -->
 <div class="part" style="--c: var(--teal)"><span class="big">3 &middot; Automated setup</span><span class="line"></span></div>
 
@@ -749,7 +790,7 @@ aws sts get-caller-identity  <span class="c"># "Account" must be the workload ac
       <tr><th>Tool</th><th>What it does for you</th><th>You run</th></tr>
       <tr><td><code>scripts\bootstrap-state.ps1</code></td><td>Creates or checks the Terraform state bucket and <code>backend.hcl</code>.</td><td>1 command, once per environment</td></tr>
       <tr><td><b>Terraform</b> (<code>terraform/site</code>)</td><td>Builds, changes or removes all 15 AWS resources of the site.</td><td><code>init</code>, <code>plan</code>, <code>apply</code>, <code>output</code></td></tr>
-      <tr><td>GitHub Actions <b>Checks</b></td><td>Checks Terraform format and validity on every push to <code>main</code>. Never touches AWS.</td><td>Nothing (automatic)</td></tr>
+      <tr><td>GitHub Actions <b>Checks</b></td><td>Checks the repository rules (<code>scripts/check-repo.sh</code>), Terraform format and validity, and that the PowerShell scripts parse, on every push to <code>main</code> and every pull request. Never touches AWS.</td><td>Nothing (automatic)</td></tr>
       <tr><td>GitHub Actions <b>Deploy website</b></td><td>Signs in to AWS, uploads <code>web/index.html</code>, checks the live page matches.</td><td>1 click per release</td></tr>
     </table></div>
   </div>
@@ -776,13 +817,18 @@ aws sts get-caller-identity  <span class="c"># "Account" must be the workload ac
     <h3>How to run it</h3>
     <ol class="steps" style="--c: var(--teal)">
       <li>Prerequisites done; section 2d done if your organization restricts regions.</li>
-      <li>Open <b>Windows PowerShell</b> in the repository root (the folder with <code>scripts</code> and <code>terraform</code>).</li>
+      <li>Open <b>Windows PowerShell</b> and go to the project root: the top folder of the project, the one that holds <code>scripts</code> and <code>terraform</code>. The script runs as <code>.\scripts\...</code>, so it only works from there.</li>
+      <li>Check the account with <code>aws sts get-caller-identity</code>: <b>Account</b> must be the workload account. Use that number as <code>&lt;account-id&gt;</code> below. You do not need <code>aws configure</code> again; run it only if this command fails with a credentials error.</li>
       <li>Preview with <code>-WhatIf</code>, read the output.</li>
       <li>Run without <code>-WhatIf</code>; answer <b>Y</b> if it asks.</li>
     </ol>
-<pre><code><span class="c"># 1. Preview: reads only</span>
+<pre><code><span class="c"># 1. Go to the project root (your own path)</span>
+Set-Location "&lt;path to your project&gt;"
+<span class="c"># 2. Check the account: "Account" must be the workload account</span>
+aws sts get-caller-identity
+<span class="c"># 3. Preview: reads only</span>
 .\scripts\bootstrap-state.ps1 -Environment staging -Region us-east-1 -ExpectedAccountId "&lt;account-id&gt;" -WhatIf
-<span class="c"># 2. Run: creates or fixes only what is missing</span>
+<span class="c"># 4. Run: creates or fixes only what is missing</span>
 .\scripts\bootstrap-state.ps1 -Environment staging -Region us-east-1 -ExpectedAccountId "&lt;account-id&gt;"</code></pre>
     <div class="two">
       <div><div class="see-label">You'll see: already set up (our real run)</div>
@@ -844,7 +890,7 @@ Created backend configuration: ...\staging\backend.hcl</code></pre></div>
       <tr><td><code>aws_region</code></td><td><code>us-east-1</code></td><td></td></tr>
       <tr><td><code>environment</code></td><td><code>staging</code></td><td>Must match the GitHub environment name.</td></tr>
       <tr><td><code>site_bucket_name</code></td><td><code>&lt;project&gt;-staging-site-&lt;timestamp&gt;</code></td><td>Globally unique, no underscores, not the state bucket.</td></tr>
-      <tr><td><code>github_repository</code></td><td><code>&lt;owner&gt;@&lt;owner-id&gt;/&lt;repo&gt;@&lt;repo-id&gt;</code></td><td>GitHub sends numeric IDs for this repo; the plain <code>&lt;owner&gt;/&lt;repo&gt;</code> fails. See below.</td></tr>
+      <tr><td><code>github_repository</code></td><td><code>&lt;owner&gt;@&lt;owner-id&gt;/&lt;repo&gt;@&lt;repo-id&gt;</code></td><td>The repository from 2f. GitHub sends its numeric IDs; the plain <code>&lt;owner&gt;/&lt;repo&gt;</code> fails. See below.</td></tr>
       <tr><td><code>github_oidc_provider_arn</code></td><td>ARN from 2e</td><td>Not <code>123456789012</code>, not the role ARN.</td></tr>
       <tr><td><code>alert_email</code></td><td>A mailbox you read</td><td>Not <code>replace@example.com</code>.</td></tr>
     </table></div>
@@ -1024,7 +1070,7 @@ website_url = "https://d****.cloudfront.net"</code></pre>
     </div>
     <div class="check"><b class="hd">Check first:</b> <span class="path">Settings &rsaquo; Environments</span>. <code>staging</code> exists? Only check the rule and variables. After a new apply, <b>update <code>SITE_BUCKET</code> and <code>WEBSITE_URL</code></b>: they change on every rebuild.</div>
     <ol class="steps" style="--c: var(--gh)">
-      <li>Push the project to <code>&lt;owner&gt;/&lt;repo&gt;</code> (workflows must be in <code>.github/workflows</code> at the root).</li>
+      <li>The project is already on GitHub (<a href="#gh-repo">2f</a>), with the workflows in <code>.github/workflows</code> at the root.</li>
       <li><b>Settings</b> &rsaquo; <span class="path">Environments</span> &rsaquo; <b>New environment</b> &rsaquo; <code>staging</code> &rsaquo; <b>Configure environment</b>.</li>
       <li><b>Deployment branches and tags</b>: <b>Selected branches and tags</b> &rsaquo; <b>Add deployment branch or tag rule</b> &rsaquo; Branch <code>main</code> &rsaquo; <b>Add rule</b>.</li>
       <li><b>Environment variables</b> &rsaquo; <b>Add environment variable</b> for each row:</li>
@@ -1156,18 +1202,53 @@ website_url = "https://d****.cloudfront.net"</code></pre>
 
 <section class="sec" id="cleanup">
   <div class="sketch" style="--c: var(--ink)">
-    <h2>Clean up <span class="chip pc">Your PC</span></h2>
+    <h2>Clean up: tear down staging <span class="chip gh">GitHub</span><span class="chip pc">Your PC</span><span class="chip work">Workload account</span></h2>
     <div class="wwy">
-      <div class="w-what"><b class="l">WHAT</b>Deletes the 15 site resources, including every file version in the website bucket.</div>
-      <div class="w-why"><b class="l">WHY</b>Stops all running costs when you no longer need staging.</div>
+      <div class="w-what"><b class="l">WHAT</b>Deletes the 15 site resources, including every version of the page in the website bucket.</div>
+      <div class="w-why"><b class="l">WHY</b>Stops the running cost when you no longer need staging.</div>
       <div class="w-see"><b class="l">YOU'LL SEE</b><i>Apply complete! Resources: 0 added, 0 changed, 15 destroyed.</i> and an empty <code>terraform state list</code>.</div>
     </div>
-<pre><code>aws sts get-caller-identity
+    <div class="warn"><b>Cannot be undone.</b> Destroying the website bucket deletes every version of the page. A later <code>apply</code> builds a new site with a new CloudFront address.</div>
+    <ol class="steps" style="--c: var(--ink)">
+      <li><b>Pause deploys</b> in GitHub: <b>Actions</b> &rsaquo; <b>Deploy website</b> &rsaquo; <b>...</b> (top right) &rsaquo; <b>Disable workflow</b>. Then no run can upload to a bucket that is being deleted.</li>
+      <li>In <b>Windows PowerShell</b>, go to the project root, check that <code>aws sts get-caller-identity</code> shows the workload account, then go to <code>terraform\site</code>.</li>
+      <li>Point Terraform at the <b>staging</b> state with <code>init -reconfigure</code>. <code>terraform state list</code> must list the 15 resources. If it prints nothing, you are on the wrong backend or staging is already gone: stop.</li>
+      <li><b>Plan</b> the destroy and read it. The last line must be <i>Plan: 0 to add, 0 to change, 15 to destroy.</i>, and every name must be a staging one (<code>&lt;project&gt;-staging-...</code>).</li>
+      <li><b>Apply</b> that plan. It takes several minutes; CloudFront is the slowest. It must end with <i>Apply complete! Resources: 0 added, 0 changed, 15 destroyed.</i>, and afterwards <code>terraform state list</code> prints nothing.</li>
+    </ol>
+<pre><code><span class="c"># Steps 2 and 3: right account, right folder, right environment</span>
+Set-Location "&lt;path to your project&gt;"
+aws sts get-caller-identity
+Set-Location .\terraform\site
+terraform init -reconfigure "-backend-config=..\environments\staging\backend.hcl"
 terraform state list
+<span class="c"># Steps 4 and 5. Destroy: plan, review, apply, then confirm the list is empty</span>
 terraform plan -destroy "-var-file=..\environments\staging\site.tfvars" "-out=staging-destroy.tfplan"
 terraform show staging-destroy.tfplan
-terraform apply "staging-destroy.tfplan"</code></pre>
-    <div class="note"><b>Left behind on purpose:</b> the state bucket, the OIDC provider, the SCP entries, the GitHub environment, and the payment method. After a new apply, update <code>SITE_BUCKET</code> and <code>WEBSITE_URL</code> in GitHub.</div>
+terraform apply staging-destroy.tfplan
+terraform state list</code></pre>
+    <div class="ok"><b>How you know it is all gone:</b> Terraform deletes each resource and waits for AWS to confirm. If a deletion fails, <code>apply</code> stops with an error and that resource stays in <code>terraform state list</code>. So "15 destroyed" plus an empty list means nothing of the site is left.</div>
+    <div class="note"><b>Left behind on purpose</b>, each a separate decision: the state bucket and its old state versions (keep it if you may rebuild; the next apply reuses it; to remove it, see step 6 below), the GitHub login provider (shared by every project in the account), the SCP entries, the GitHub environment and its variables, and the payment method. <b>To use staging again:</b> apply (section 4), update <code>SITE_BUCKET</code> and <code>WEBSITE_URL</code>, confirm the new alert email, then enable the workflow again.</div>
+    <h3>Why the state bucket and its file stay after a destroy</h3>
+    <p>Terraform never deletes its state file, not even after a full destroy. It rewrites it as an <b>empty state</b> (0 resources) that still records this environment's history, so a later <code>apply</code> continues from it. The only file Terraform removes is its lock file, at the end of every command. The bucket itself was created by the script in section 3, not by Terraform, so no destroy touches it; Terraform even needs it during the destroy, to save that final empty state.</p>
+    <div class="tablewrap"><table>
+      <tr><th>File in the state bucket</th><th>What it is</th><th>After a destroy</th></tr>
+      <tr><td><code>&lt;project&gt;/staging/terraform.tfstate</code></td><td>Terraform's record of what it built</td><td><b>Kept</b>, rewritten with 0 resources. Its older versions are kept too (versioning).</td></tr>
+      <tr><td><code>&lt;project&gt;/staging/terraform.tfstate.tflock</code></td><td>The lock that stops two runs at once</td><td><b>Deleted</b> at the end of every command; only delete markers remain.</td></tr>
+    </table></div>
+    <h3>Step 6 (optional): remove the state bucket <span class="chip manual">MANUAL</span><span class="chip work">Workload account</span></h3>
+    <p>Only if you will not rebuild this environment. It is a separate decision from the teardown, and it cannot be undone.</p>
+    <div class="warn"><b>Only after step 5 is clean:</b> <i>15 destroyed</i> and an empty <code>terraform state list</code>. If you delete the state bucket while site resources still exist, Terraform loses track of them and you have to find and delete each one by hand.</div>
+    <ol class="steps" style="--c: var(--ink)">
+      <li>Console, workload account: <span class="path">S3 &rsaquo; Buckets</span> &rsaquo; select <code>&lt;project&gt;-v1-staging-state-&lt;random&gt;</code> &rsaquo; <b>Empty</b> &rsaquo; type <code>permanently delete</code> &rsaquo; <b>Empty</b>. Because versioning is on, this removes every version and delete marker, not only the latest file.</li>
+      <li>Select the bucket again &rsaquo; <b>Delete</b> &rsaquo; type the bucket name &rsaquo; <b>Delete bucket</b>.</li>
+      <li>On your PC, from the project root, rename <code>backend.hcl</code>: it names the deleted bucket, and the script in section 3 stops when <code>backend.hcl</code> points at a missing bucket. To rebuild later, run section 3 again; it creates a new bucket and a new <code>backend.hcl</code>.</li>
+    </ol>
+<pre><code><span class="c"># Step 6.3, from the project root</span>
+Rename-Item .\terraform\environments\staging\backend.hcl backend.hcl.old
+<span class="c"># Check: the state bucket is no longer listed</span>
+aws s3api list-buckets --query "Buckets[].Name"</code></pre>
+    <p><b>Production:</b> the same steps with <code>production</code> in place of <code>staging</code>.</p>
   </div>
 </section>
 

@@ -7,7 +7,7 @@ A single HTML page, designed to be delivered through CloudFront from a private S
 ## Project structure
 
 ```text
-v1-static-site\
+one-step-towards-ai\
   web\
     index.html
   terraform\
@@ -25,35 +25,40 @@ v1-static-site\
         backend.example.hcl
         site.example.tfvars
   docs\
-    step-01-static-website.pdf
+    staging-deployment-guide.html
+    staging-deployment.md
     operations.md
+    coding-agent-prompt.md
   scripts\
     bootstrap-state.ps1
-    check-site-resources.ps1
+    check-repo.sh
   .github\
     workflows\
       checks.yml
       deploy.yml
+  .gitattributes
   .gitignore
   README.md
 ```
 
-Only `web/index.html` is published. The V1 learning guide is stored as a PDF in `docs`.
+Only `web/index.html` is published. The guides are in `docs`.
 
-Commands below start from the `v1-static-site` folder. GitHub only discovers workflows at the repository root in `.github/workflows`. If this folder is kept inside a larger repository, its workflows must be relocated and adapted to the repository paths before they can run; alternatively, use this folder as its own repository.
+Commands below start from the repository root, the `one-step-towards-ai` folder. GitHub only runs workflows from `.github/workflows` at the repository root.
 
 ## Start here
 
-1. Review the [V0 prerequisites PDF](../v0-prerequisites/docs/aws-and-terraform-prerequisites.pdf), if V0 is available alongside V1.
-2. Open the [V1 static website guide](docs/step-01-static-website.pdf).
-3. Open `web\index.html` in a browser to preview the page.
-4. Read the [operations guide](docs/operations.md) before provisioning AWS or setting up GitHub.
+1. Open the [illustrated deployment guide](docs/staging-deployment-guide.html) (HTML, with screenshots).
+2. Open `web\index.html` in a browser to preview the page.
+3. Read the [operations guide](docs/operations.md) before provisioning AWS or setting up GitHub.
    For a manual staging setup, see the [step-by-step deployment guide](docs/staging-deployment.md).
-5. Run the local infrastructure checks:
+4. Run the local checks, the same ones the `Checks` workflow runs on GitHub:
 
    ```powershell
    terraform fmt -check -recursive terraform
+   & "$env:ProgramFiles\Git\bin\bash.exe" scripts/check-repo.sh
    ```
+
+   `check-repo.sh` needs Git Bash. Plain `bash` in PowerShell usually starts WSL instead, so call Git Bash's `bash.exe` as shown, or run `bash scripts/check-repo.sh` inside a Git Bash window. It prints six `[OK]` lines and `All repository checks passed.`
 
 The [operations guide](docs/operations.md) explains how to bootstrap a private state bucket with `scripts\bootstrap-state.ps1` before initializing the site backend. The script creates billable AWS resources only after confirmation; it does not deploy the site.
 
@@ -69,7 +74,7 @@ Staging and production have separate site buckets, CloudFront distributions, dep
 
 Route 53 health checks and CloudWatch alarms send alerts to an SNS email subscription. You must confirm the subscription. These services, S3, and CloudFront can incur charges.
 
-For temporary deployments, capture the resource inventory after applying Terraform and follow the [teardown and verification checklist](docs/operations.md#7-teardown-and-verify-one-environment) when finished. Destroying the website bucket permanently deletes all its object versions. Shared state and resources require a separate review.
+For temporary deployments, follow the [teardown and verification checklist](docs/operations.md#7-teardown-and-verify-one-environment) when finished. Destroying the website bucket permanently deletes all its object versions. Shared state and resources require a separate review.
 
 ## Security boundaries
 
