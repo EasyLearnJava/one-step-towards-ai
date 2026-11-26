@@ -1,0 +1,4 @@
+# Send only the app to the Docker build; tests, docs, Terraform and .git stay out.
+*
+!app/
+app/__pycache__/
