@@ -199,7 +199,7 @@
 <section class="sec" id="status">
   <div class="sketch alt" style="--c: var(--green)">
     <h2>Where we are now</h2>
-    <p>Version 2 is built in 16 small pieces. Each one ends with a check you can see and leaves everything working. Status as of <b>26 November 2026</b>:</p>
+    <p>Version 2 is built in 16 small pieces. Each one ends with a check you can see and leaves everything working. Status as of <b>26 November 2026</b> (complete, tag <code>v2.0.0</code>):</p>
     <div class="tablewrap"><table>
       <tr><th>Piece</th><th>What it adds</th><th>Where</th><th>Status</th></tr>
       <tr><td><a href="#s20">2.0</a></td><td>Decisions, Lambda limit check, Python 3.13 venv</td><td><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
@@ -212,11 +212,11 @@
       <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s29">2.9</a></td><td>CloudFront route <code>/api/*</code> to Lambda</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
-      <tr><td><a href="#s210">2.10</a></td><td>Deploy workflow updates the function</td><td><span class="chip gh">GitHub</span><span class="chip work">AWS</span></td><td><span class="chip todo">code ready: one apply + one Deploy run</span></td></tr>
-      <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">code ready, tested locally: same apply + Deploy run</span></td></tr>
-      <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">docs written; tag after your checks</span></td></tr>
+      <tr><td><a href="#s210">2.10</a></td><td>Deploy workflow updates the function</td><td><span class="chip gh">GitHub</span><span class="chip work">AWS</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip done">done: <code>v2.0.0</code></span></td></tr>
     </table></div>
-    <div class="note"><b>Today the API is live on the website</b> (since 2.9): <code>https://d****.cloudfront.net/api/health</code> and <code>/api/hello</code> answer through CloudFront from Lambda, running commit <code>9d044a6</code>. Locally it also runs on your PC (dev server on port 8000, Docker container on port 8001). <b>What is not live yet:</b> the button (2.12) and the automatic switch of Lambda to new code (2.10). Both need the one Terraform apply and one full Deploy run in <a href="#apply-run">2.10 to 2.12</a>; after that, tag <code>v2.0.0</code> (<a href="#s213">2.15</a>). All work goes straight onto <code>main</code> (no feature branches). Deploy is a manual click, so pushing to <code>main</code> never puts anything live by itself.</div>
+    <div class="ok"><b>Version 2 is complete and tagged <code>v2.0.0</code></b> (commit <code>8839818</code>). The page with its button, <code>/api/health</code> and <code>/api/hello</code> are live through CloudFront from Lambda, and every Deploy run now switches Lambda to the new image. Locally it also runs on your PC (dev server on port 8000, Docker container on port 8001). Next: <a href="#later">step 3</a>. All work goes straight onto <code>main</code> (no feature branches). Deploy is a manual click, so pushing to <code>main</code> never puts anything live by itself.</div>
   </div>
 </section>
 
@@ -549,8 +549,8 @@
       <div class="sketch alt st" style="--c: var(--docker)"><span class="n">2</span><b>Docker image</b>2.4<br><span class="chip done">done</span></div>
       <div class="sketch st" style="--c: var(--gh)"><span class="n">3</span><b>GitHub checks</b>2.5<br><span class="chip done">done</span></div>
       <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip done">done</span></div>
-      <div class="sketch st" style="--c: var(--orange)"><span class="n">5</span><b>Auto deploy</b>2.10<br><span class="chip todo">your apply + run</span></div>
-      <div class="sketch alt st" style="--c: var(--purple)"><span class="n">6</span><b>Page + release</b>2.11 to 2.15<br><span class="chip todo">your apply + run, then tag</span></div>
+      <div class="sketch st" style="--c: var(--orange)"><span class="n">5</span><b>Auto deploy</b>2.10<br><span class="chip done">done</span></div>
+      <div class="sketch alt st" style="--c: var(--purple)"><span class="n">6</span><b>Page + release</b>2.11 to 2.15<br><span class="chip done">done</span></div>
     </div>
     <p>Stages 1 to 3 happen only on your PC and GitHub, with no AWS cost. From stage 4 on, pieces change AWS, and you run Terraform yourself as in the version 1 guide.</p>
   </div>
@@ -867,7 +867,7 @@ aws ecr describe-images --region us-east-2 --repository-name one-step-staging-ap
 
 <section class="sec" id="s210">
   <div class="sketch" style="--c: var(--gh)">
-    <h2><span class="num" style="--c: var(--gh)">2.10</span>Deploy the API from GitHub <span class="chip todo">code ready: one apply + one Deploy run</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
+    <h2><span class="num" style="--c: var(--gh)">2.10</span>Deploy the API from GitHub <span class="chip done">done</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>Every Deploy run now ships the API too: build, push, <b>switch the function to the new image</b>, check the live API, then the page.</div>
       <div class="w-why"><b class="l">WHY</b>Code becomes a release like the page: one click, checked automatically, and the run fails loudly if the live API is not on the new commit.</div>
@@ -1171,7 +1171,7 @@ curl.exe -sS -o NUL -w "%{http_code}`n" "${url}api/health"                      
 
 <section class="sec" id="s211">
   <div class="sketch" style="--c: var(--purple)">
-    <h2><span class="num" style="--c: var(--purple)">2.11</span><span class="num" style="--c: var(--purple)">2.12</span>The page calls the API <span class="chip todo">code ready, tested locally</span></h2>
+    <h2><span class="num" style="--c: var(--purple)">2.11</span><span class="num" style="--c: var(--purple)">2.12</span>The page calls the API <span class="chip done">done</span></h2>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>A button on the page, <b>Say hello to the API</b>, that calls <code>/api/hello</code> and shows the welcome under it.</div>
       <div class="w-why"><b class="l">WHY</b>The first time the page and the API work together, the shape every later step (ask, chat, agent) will use.</div>
@@ -1192,7 +1192,8 @@ curl.exe -sS -o NUL -w "%{http_code}`n" "${url}api/health"                      
 
 <section class="sec" id="apply-run">
   <div class="sketch alt" style="--c: var(--orange)">
-    <h2>2.10 to 2.12: one apply and one Deploy run <span class="chip todo">your turn</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
+    <h2>2.10 to 2.12: one apply and one Deploy run <span class="chip done">done</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
+    <div class="ok"><b>Result (26 November 2026):</b> apply 0 to add, 2 to change; CloudFront sends <code>script-src 'self'; connect-src 'self'</code>. Checks and the full Deploy run for <code>8839818</code> green; <code>/api/health</code> reports <code>8839818...</code>, <code>/api/hello</code> the welcome, <code>app.js</code> served, Lambda update <i>Successful</i> on the new digest, alarm <code>one-step-staging-unavailable</code> OK.</div>
     <p>2.10 and 2.11 change only two existing resources, so they share <b>one</b> Terraform apply. Then <b>one</b> full Deploy run ships the API and the new page.</p>
     <div class="warn"><b>Order matters:</b> apply first, then Deploy. Without the apply, the run fails at <i>Switch the Lambda function</i> (<code>AccessDenied</code> on <code>UpdateFunctionCode</code>) or at <i>Publish the page</i> (<code>AccessDenied</code> on <code>app.js</code>), and the button would be blocked by the old security policy.</div>
     <h3>Step A &middot; Plan and apply <span class="chip pc">Your PC</span><span class="chip manual">changes AWS</span></h3>
@@ -1236,12 +1237,12 @@ curl.exe -sS -I "https://d****.cloudfront.net/" | Select-String content-security
 
 <section class="sec" id="s213">
   <div class="sketch alt" style="--c: var(--gold)">
-    <h2><span class="num" style="--c: var(--gold)">2.13</span>to<span class="num" style="--c: var(--gold)">2.15</span>Docs and release <span class="chip todo">docs written; tag after your checks</span></h2>
+    <h2><span class="num" style="--c: var(--gold)">2.13</span>to<span class="num" style="--c: var(--gold)">2.15</span>Docs and release <span class="chip done">done</span></h2>
     <div class="tablewrap"><table>
       <tr><th>Piece</th><th>Status</th><th>What is left</th></tr>
       <tr><td>2.13 Docs</td><td><span class="chip done">done</span> (commit <code>a8afc7c</code>)</td><td>Nothing. The rebuild order below has not been run end to end yet.</td></tr>
       <tr><td>2.14 Coding-agent prompt</td><td><span class="chip done">done</span> (commit <code>a8afc7c</code>)</td><td>Nothing. Optional: a full rebuild by another coding agent.</td></tr>
-      <tr><td>2.15 Release</td><td><span class="chip todo">your turn</span></td><td>After the <a href="#apply-run">2.10 to 2.12</a> apply and Deploy run: tag <code>v2.0.0</code> (steps below).</td></tr>
+      <tr><td>2.15 Release</td><td><span class="chip done">done</span></td><td>Nothing. <code>v2.0.0</code> tagged on the deployed commit <code>8839818</code> and pushed (26 November 2026).</td></tr>
     </table></div>
 
     <h3>2.13 &middot; Docs: what each file now covers</h3>
@@ -1272,7 +1273,7 @@ curl.exe -sS -I "https://d****.cloudfront.net/" | Select-String content-security
     </div>
     <div class="ok"><b>How it was checked:</b> a scratch repository was rebuilt from the files in the prompt, then: <code>terraform fmt</code> and <code>validate</code> pass; the plan has <b>25</b> resources; <code>pytest</code> <b>3 passed</b>; both workflows parse; the image builds and answers <code>/api/health</code> and <code>/api/hello</code>; <code>check-repo.sh</code> passes. <b>Not done:</b> a full rebuild by another coding agent.</div>
 
-    <h3>2.15 &middot; Release: tag <code>v2.0.0</code> <span class="chip todo">your turn</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h3>
+    <h3>2.15 &middot; Release: tag <code>v2.0.0</code> <span class="chip done">done</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h3>
     <div class="check"><b class="hd">Check first:</b> the <a href="#apply-run">2.10 to 2.12</a> Deploy run is green, the button shows the welcome, the alarm is OK, and <b>Checks</b> is green for the deployed commit (<span class="path">Actions &rsaquo; Checks</span>, filter by branch <code>main</code>).</div>
     <ol class="steps" style="--c: var(--gold)">
       <li>Read the commit that is live from <code>/api/health</code>. That is the commit to tag, so the tag marks exactly what was tested.</li>
@@ -1348,9 +1349,9 @@ aws lambda wait function-updated --function-name one-step-staging-api --region u
       <tr><td><code>.github/workflows/checks.yml</code></td><td>New <code>api</code> job: tests, image build, start-up check (2.5)</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and lifecycle rule (2.6), Lambda function, log group, execution role, function URL (2.8), all applied; CloudFront access control and the two invoke permissions (2.9)</td><td><span class="chip done">on main, 2.6, 2.8, 2.9 applied</span></td></tr>
       <tr><td><code>terraform/site/versions.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider (2.6); outputs for ECR, region, function name and URL (2.6, 2.8)</td><td><span class="chip done">on main, applied</span></td></tr>
-      <tr><td><code>terraform/site/main.tf</code></td><td>ECR push rights (2.6, applied); <code>/api/*</code> origin and behavior (2.9, applied); deploy role may update the function and upload <code>app.js</code>, CSP allows own script and API (2.10, 2.11)</td><td><span class="chip done">on main</span> <span class="chip todo">2.10/2.11 part: your apply</span></td></tr>
+      <tr><td><code>terraform/site/main.tf</code></td><td>ECR push rights (2.6, applied); <code>/api/*</code> origin and behavior (2.9, applied); deploy role may update the function and upload <code>app.js</code>, CSP allows own script and API (2.10, 2.11)</td><td><span class="chip done">applied</span></td></tr>
       <tr><td><code>.github/workflows/deploy.yml</code></td><td>Job <code>api</code>: production gate, build, push (no provenance), switch the function to the image digest, verify the live API; job <code>deploy</code>: <code>app.js</code> then <code>index.html</code>, both verified (2.7, 2.10, 2.12)</td><td><span class="chip done">on main</span></td></tr>
-      <tr><td><code>web/index.html</code>, <code>web/app.js</code></td><td>The button that calls <code>/api/hello</code> (2.12)</td><td><span class="chip done">on main</span> <span class="chip todo">live after your Deploy run</span></td></tr>
+      <tr><td><code>web/index.html</code>, <code>web/app.js</code></td><td>The button that calls <code>/api/hello</code> (2.12)</td><td><span class="chip done">live</span></td></tr>
       <tr><td><code>README.md</code>, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code>, <code>docs/coding-agent-prompt.md</code></td><td>Version 2 documentation (2.13, 2.14)</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on main</span> (covers 2.0 to 2.15)</td></tr>
       <tr><td><code>TODO.md</code></td><td>The step 2 plan, piece by piece</td><td><span class="chip done">on main</span></td></tr>

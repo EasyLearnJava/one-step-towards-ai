@@ -1,5 +1,7 @@
 # TODO: step 2, a Python API that welcomes you to the agentic world
 
+**Status: complete, tagged `v2.0.0` (2026-11-26).** Next: step 3 below.
+
 Step 2 is a walking skeleton: the smallest version of the future RAG and
 agent app that runs end to end on the real stack (Python, FastAPI,
 LangChain, Docker, AWS Lambda, CloudFront, CI/CD), with no AI model yet.
@@ -168,8 +170,8 @@ GitHub in 2.5), and if run locally with
 - [x] You: plan and apply (17 to add). Checked: repository
       `one-step-staging-api` in us-east-2, scan on push, keep-5 rule, deploy
       role has the ECR push actions.
-- [ ] GitHub variable `API_ECR_REPOSITORY` on `staging`.
-- [ ] The staging stack was destroyed, so this apply also rebuilds the
+- [x] GitHub variable `API_ECR_REPOSITORY` on `staging`.
+- [x] The staging stack was destroyed, so this apply also rebuilds the
       existing 15 resources: update `SITE_BUCKET` and `WEBSITE_URL`, confirm
       the new SNS email, run the deploy once for the page.
 
@@ -246,9 +248,12 @@ curl.exe -sS "https://<your-cloudfront-domain>/api/hello"
       now called `api`; the function is pinned to the image digest that
       ECR reports. The production gate moved to the start of the `api` job,
       so nothing ships to production before the gate passes.
-- [ ] You: one Terraform apply for 2.10 and 2.11 together (0 to add, 2 to
+- [x] You: one Terraform apply for 2.10 and 2.11 together (0 to add, 2 to
       change: the deploy role policy and the response headers policy), then
-      a full Deploy run (image only not ticked).
+      a full Deploy run (image only not ticked). Done on 2026-11-26 for
+      `8839818`: Checks and Deploy green, `/api/health` reports `8839818`,
+      the CSP has `script-src 'self'; connect-src 'self'`, `app.js` is
+      served, Lambda update Successful, alarm OK.
 
 **Done when:** a Deploy run is green and `/api/health` shows that run's
 commit.
@@ -309,8 +314,9 @@ stays OK.
 
 ### 2.15 Release
 
-- [ ] Wait for Checks on `main`, tag `v2.0.0`.
-- [ ] Production is not built yet; promoting to production stays in step 6.
+- [x] Wait for Checks on `main`, tag `v2.0.0`. Tagged on 2026-11-26 on the
+      deployed commit `8839818` and pushed.
+- [x] Production is not built yet; promoting to production stays in step 6.
 
 **Done when:** Checks is green on the tagged commit and `v2.0.0` is on
 GitHub.
