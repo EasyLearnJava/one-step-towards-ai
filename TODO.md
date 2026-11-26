@@ -124,13 +124,19 @@ check, no 422 and no name logging.
 
 ### 2.4 Docker image
 
-- [ ] `Dockerfile`: pinned Python 3.13 base image (by digest), requirements,
-      app, the AWS Lambda Web Adapter (pinned version), a non-root user;
+- [x] `Dockerfile`: pinned Python 3.13 base image (by digest), requirements,
+      app, the AWS Lambda Web Adapter (1.1.0, by digest), a non-root user;
       runs `uvicorn app.main:app` on the port the adapter is told to use;
       adapter readiness check on `/api/health`; commit SHA passed in as a
       build argument.
-- [ ] `.dockerignore`: tests, docs, Terraform, `.git` and local files stay
-      out of the image.
+- [x] `.dockerignore`: only `app/` is sent to the build.
+- [x] Local builds pass through Zscaler, which re-signs HTTPS: build with
+      `--secret id=ca,src=$env:USERPROFILE\certs\zscaler-ca-bundle.pem`
+      (public CAs plus the Zscaler root; used by pip only, not stored in
+      the image). GitHub builds need no secret.
+
+Checked on 2026-11-26: image 281 MB, Python 3.13.18, runs as `nobody`;
+`/api/health` and `/api/hello` answer, `/docs` is 404.
 
 **Done when:** the image builds (on your PC with Docker Desktop, or on
 GitHub in 2.5), and if run locally with

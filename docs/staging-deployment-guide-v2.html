@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Guide v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #2b2b2b; --muted: #5d5a55; --paper: #fffdf8; --card: #ffffff; --dot: #ebe5d7;
+    --blue: #3b7fc4; --green: #3a9a5b; --orange: #e0811f; --purple: #7b5cc4; --red: #d24b47;
+    --teal: #23958a; --gold: #c99a06; --gh: #24292f; --mark: #ffe58a; --docker: #1d63ed;
+    --code-bg: #f3efe4; --pre-bg: #2d2a26; --pre-ink: #f5f1e8; --nav-w: 290px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body {
+    margin: 0; color: var(--ink); background: var(--paper);
+    font-family: 'Patrick Hand', 'Comic Sans MS', 'Segoe Print', cursive; font-size: 20px; line-height: 1.45;
+    background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size: 24px 24px;
+  }
+  h1, h2, h3, .hand { font-family: 'Kalam', 'Patrick Hand', cursive; }
+  h1 { font-size: 38px; margin: 0 0 6px; line-height: 1.15; }
+  h2 { font-size: 30px; margin: 0 0 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  h3 { font-size: 23px; margin: 22px 0 6px; }
+  p { margin: 8px 0; }
+  a { color: var(--blue); }
+  code { font-family: Consolas, 'Courier New', monospace; font-size: 15px; background: var(--code-bg); padding: 1px 6px; border-radius: 5px; word-break: break-word; }
+  pre { background: var(--pre-bg); color: var(--pre-ink); padding: 14px 16px; border-radius: 12px 4px 12px 4px; overflow-x: auto; font-size: 14px; line-height: 1.5; border: 2px solid var(--ink); margin: 10px 0; }
+  pre code { background: none; padding: 0; font-size: 14px; color: inherit; word-break: normal; }
+  pre .c { color: #b9b19f; } pre .g { color: #8fd19e; } pre .y { color: #ffd479; } pre .r { color: #ff9a8f; }
+
+  .layout { display: grid; grid-template-columns: var(--nav-w) minmax(0, 1fr); }
+  .sidenav {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 18px 14px 40px 16px;
+    border-right: 2.5px solid var(--ink); background: #fffaf0;
+  }
+  .sidenav .brand { font-family: 'Kalam', cursive; font-size: 22px; line-height: 1.2; margin: 0 0 12px; }
+  .sidenav .grp { font-family: 'Kalam', cursive; font-weight: 700; font-size: 17px; margin: 16px 0 4px; display: flex; gap: 8px; align-items: center; }
+  .sidenav .grp .dot { width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; color: #fff; background: var(--c); border: 2px solid var(--ink); font-size: 13px; }
+  .sidenav a { display: block; padding: 3px 8px 3px 32px; font-size: 17px; color: var(--ink); text-decoration: none; border-radius: 10px 3px 10px 3px; }
+  .sidenav a:hover { background: #f3ecdc; }
+  .sidenav a.active { background: var(--mark); font-weight: bold; }
+  main { padding: 26px 28px 90px; max-width: 1120px; width: 100%; margin: 0 auto; }
+  h2 code, h3 code { font-size: .85em; padding: 0 8px; }
+  .menu-btn { display: none; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidenav { position: fixed; z-index: 40; left: 0; top: 0; width: 86vw; max-width: 320px; transform: translateX(-105%); transition: transform .2s; box-shadow: 6px 0 0 rgba(0,0,0,.12); }
+    .sidenav.open { transform: none; }
+    .menu-btn { display: inline-block; position: sticky; top: 8px; z-index: 30; margin: 8px 0 0 12px; font-family: 'Kalam', cursive; font-size: 18px; background: #fff; border: 2.5px solid var(--ink); border-radius: 14px 4px 14px 4px; padding: 4px 14px; cursor: pointer; }
+    main { padding: 12px 16px 80px; }
+  }
+
+  .sketch {
+    position: relative; background: var(--card); border: 2.5px solid var(--c, var(--ink));
+    border-radius: 255px 16px 225px 16px / 16px 225px 16px 255px; box-shadow: 4px 5px 0 rgba(0, 0, 0, .10); padding: 20px 24px;
+  }
+  .sketch.alt { border-radius: 16px 225px 16px 255px / 255px 16px 225px 16px; }
+  section.sec { margin: 30px 0; scroll-margin-top: 12px; }
+  section.sec > .sketch { padding: 24px 28px; }
+  .part { margin: 46px 0 6px; display: flex; align-items: center; gap: 12px; }
+  .part .big { font-family: 'Kalam', cursive; font-size: 34px; color: var(--c); }
+  .part .line { flex: 1; border-top: 3px dashed var(--c); }
+
+  .num { display: inline-grid; place-items: center; flex: none; min-width: 40px; height: 40px; padding: 0 6px; border-radius: 20px; background: var(--c, var(--ink)); color: #fff; font-family: 'Kalam', cursive; font-weight: 700; font-size: 18px; border: 2.5px solid var(--ink); }
+  .chip { display: inline-block; font-size: 15px; line-height: 1.2; padding: 4px 10px; margin: 2px 4px 2px 0; border: 2px solid var(--cc, var(--ink)); color: var(--cc, var(--ink)); background: #fff; border-radius: 12px 4px 12px 4px; white-space: nowrap; font-family: 'Patrick Hand', cursive; }
+  .chip.once { --cc: var(--orange); background: #fff4e5; border-style: dashed; }
+  .chip.every { --cc: var(--green); background: #ebf7ef; }
+  .chip.auto { --cc: var(--teal); background: #e8f6f4; }
+  .chip.manual { --cc: var(--red); background: #fdeeee; }
+  .chip.done { --cc: var(--green); background: #ebf7ef; font-weight: bold; }
+  .chip.todo { --cc: var(--orange); background: #fff4e5; border-style: dashed; }
+  .chip.dropped { --cc: var(--muted); background: #f1efe9; text-decoration: line-through; }
+  .chip.work { --cc: var(--blue); } .chip.gh { --cc: var(--gh); } .chip.pc { --cc: var(--teal); } .chip.dk { --cc: var(--docker); }
+
+  .wwy { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 12px 0; }
+  .wwy > div { padding: 10px 14px; border: 2px solid var(--bc); border-radius: 14px 5px 16px 5px; background: var(--bg); font-size: 18px; }
+  .wwy b.l { display: block; font-family: 'Kalam', cursive; font-size: 15px; letter-spacing: .08em; color: var(--bc); }
+  .w-what { --bc: var(--blue); --bg: #eef5fc; } .w-why { --bc: var(--purple); --bg: #f4efff; } .w-see { --bc: var(--green); --bg: #ecf8f0; } .w-where { --bc: var(--gold); --bg: #fff8e0; }
+  .check { margin: 14px 0; padding: 12px 16px; background: #fff7eb; border: 2.5px dashed var(--orange); border-radius: 16px 6px 18px 6px; }
+  .check b.hd { color: var(--orange); font-family: 'Kalam', cursive; font-size: 20px; }
+  .note { margin: 14px 0; padding: 12px 16px; background: #eef5fc; border: 2.5px solid var(--blue); border-radius: 6px 16px 6px 18px; }
+  .warn { margin: 14px 0; padding: 12px 16px; background: #fdeeee; border: 2.5px solid var(--red); border-radius: 18px 6px 16px 6px; }
+  .ok { margin: 14px 0; padding: 12px 16px; background: #ecf8f0; border: 2.5px solid var(--green); border-radius: 6px 18px 6px 16px; }
+  .plan { margin: 14px 0; padding: 12px 16px; background: #fffaf0; border: 2.5px dashed var(--gold); border-radius: 6px 18px 6px 16px; }
+  .see-label { font-family: 'Kalam', cursive; color: var(--green); font-size: 18px; margin: 14px 0 -4px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .card h3 { margin: 4px 0 4px; display: flex; gap: 10px; align-items: center; font-size: 21px; flex-wrap: wrap; }
+  .card p { font-size: 18px; margin: 4px 0; }
+  .red { color: var(--red); } .green { color: var(--green); } .orange { color: var(--orange); } .purple { color: var(--purple); } .docker { color: var(--docker); }
+
+  .journey { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+  .journey .st { text-align: center; padding: 12px 6px; font-size: 16px; }
+  .journey .st b { display: block; font-family: 'Kalam', cursive; font-size: 18px; }
+  .journey .st .n { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; border: 2px solid var(--ink); font-family: 'Kalam', cursive; }
+  @media (max-width: 1000px) { .journey { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .journey { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  ol.steps { counter-reset: s; list-style: none; padding-left: 0; margin: 10px 0; }
+  ol.steps > li { counter-increment: s; position: relative; padding: 6px 0 6px 46px; margin: 4px 0; }
+  ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 4px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; border: 2.5px solid var(--c, var(--ink)); color: var(--c, var(--ink)); background: #fff; font-family: 'Kalam', cursive; font-weight: 700; font-size: 18px; }
+  .path { font-family: 'Kalam', cursive; background: var(--mark); padding: 0 6px; border-radius: 4px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .two > * { min-width: 0; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 17px; margin: 10px 0; background: #fff; }
+  th, td { border: 2px solid #cfc8b8; padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { font-family: 'Kalam', cursive; background: #f7f2e6; font-size: 18px; }
+  .tablewrap { overflow-x: auto; }
+
+  svg.diagram { width: 100%; height: auto; display: block; margin: 8px 0; }
+  svg.diagram .bx { fill: #fff; stroke-width: 2.5; }
+  svg.diagram .ar { fill: none; stroke: #2b2b2b; stroke-width: 2.5; marker-end: url(#ah); }
+  svg.diagram text { font-family: 'Kalam', 'Patrick Hand', cursive; fill: #2b2b2b; }
+  svg.diagram .t-h { font-size: 21px; font-weight: 700; }
+  svg.diagram .t-s { font-size: 16px; fill: #5d5a55; }
+  svg.diagram .t-s2 { font-size: 16px; }
+  svg.diagram .t-l { font-size: 15px; fill: #5d5a55; font-style: italic; }
+  svg.diagram .t-frame { font-size: 19px; font-weight: 700; fill: #3b7fc4; }
+  svg.diagram .t-lane { font-size: 20px; font-weight: 700; }
+  svg.diagram .t-zone { font-size: 14px; font-weight: 700; letter-spacing: .12em; }
+  svg.diagram .badge circle { fill: #2b2b2b; }
+  svg.diagram .badge text { fill: #fff; font-size: 15px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside class="sidenav" id="nav" aria-label="Guide sections">
+  <div class="brand">API Guide &middot; v2</div>
+  <div class="grp"><span class="dot" style="--c: var(--ink)">&#9733;</span>Start here</div>
+  <a href="#overview">What are we building?</a>
+  <a href="#status">Where we are now</a>
+  <a href="#need">What we need</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#dataflow">Data flow</a>
+  <a href="#journey">The journey, in 6 stages</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#read">How to read this guide</a>
+  <div class="grp"><span class="dot" style="--c: var(--docker)">&#9635;</span>Why Docker</div>
+  <a href="#why-docker">The problem Docker solves</a>
+  <a href="#image">What is inside our image</a>
+  <a href="#adapter">Lambda Web Adapter</a>
+  <a href="#docker-pc">Do you need Docker on your PC?</a>
+  <div class="grp"><span class="dot" style="--c: var(--teal)">1</span>On your PC</div>
+  <a href="#s20">2.0 Get ready</a>
+  <a href="#s21">2.1 and 2.2 The API</a>
+  <a href="#s23">2.3 Name parameter (dropped)</a>
+  <a href="#s24">2.4 Docker image</a>
+  <div class="grp"><span class="dot" style="--c: var(--gh)">2</span>On GitHub</div>
+  <a href="#s25">2.5 Checks</a>
+  <a href="#s27">2.7 Image to ECR</a>
+  <a href="#s210">2.10 Deploy the API</a>
+  <div class="grp"><span class="dot" style="--c: var(--blue)">3</span>On AWS</div>
+  <a href="#s26">2.6 ECR repository</a>
+  <a href="#s28">2.8 Lambda function</a>
+  <a href="#s29">2.9 CloudFront route</a>
+  <div class="grp"><span class="dot" style="--c: var(--purple)">4</span>Page and release</div>
+  <a href="#s211">2.11 and 2.12 The page</a>
+  <a href="#s213">2.13 to 2.15 Docs and release</a>
+  <div class="grp"><span class="dot" style="--c: var(--gold)">5</span>Reference</div>
+  <a href="#files">Files in the repository</a>
+  <a href="#trouble">Errors and fixes</a>
+  <a href="#costs">Costs</a>
+  <a href="#cleanup">Clean up</a>
+  <a href="#later">Later steps</a>
+</aside>
+
+<main>
+<button class="menu-btn" id="menuBtn" type="button" aria-controls="nav">&#9776; Menu</button>
+
+<!-- ===================== START HERE ===================== -->
+<section class="sec" id="overview">
+  <div class="sketch" style="--c: var(--purple)">
+    <h1>API Guide &middot; version 2</h1>
+    <h2 style="margin-top:6px">What are we building?</h2>
+    <p style="font-size:26px; line-height:1.35">Version 1 put an <b class="purple">HTML page</b> on AWS. Version 2 adds a small <b class="purple">Python API</b> behind the same address, so the page can ask a server for an answer instead of only showing fixed text.</p>
+    <p>The API has exactly two routes and no AI model yet. It is a <b>walking skeleton</b>: the smallest version of the future RAG and agent app that already runs end to end on the real stack (Python, FastAPI, LangChain, Docker, AWS Lambda, CloudFront, GitHub). Later steps add capabilities to it instead of rebuilding it.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Request</th><th>Reply (JSON)</th></tr>
+      <tr><td><code>GET /api/hello</code></td><td><code>{"message": "Welcome to the agentic world! This is One Step At A Time, where we build a RAG and agent app step by step."}</code></td></tr>
+      <tr><td><code>GET /api/health</code></td><td><code>{"status": "ok", "version": "&lt;commit SHA&gt;"}</code></td></tr>
+      <tr><td>anything else</td><td><code>404 {"detail": "Not Found"}</code></td></tr>
+    </table></div>
+    <p><span class="chip" style="--cc: var(--purple)">Private values (names, emails, account IDs, repository names) are shown as <b>****</b> or <b>&lt;placeholders&gt;</b></span></p>
+  </div>
+</section>
+
+<section class="sec" id="status">
+  <div class="sketch alt" style="--c: var(--green)">
+    <h2>Where we are now</h2>
+    <p>Version 2 is built in 16 small pieces. Each one ends with a check you can see and leaves everything working. Status as of <b>26 November 2026</b>:</p>
+    <div class="tablewrap"><table>
+      <tr><th>Piece</th><th>What it adds</th><th>Where</th><th>Status</th></tr>
+      <tr><td><a href="#s20">2.0</a></td><td>Decisions, Lambda limit check, Python 3.13 venv</td><td><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s21">2.1</a></td><td><code>GET /api/health</code> with tests</td><td><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s21">2.2</a></td><td><code>GET /api/hello</code> built with a LangChain template</td><td><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s23">2.3</a></td><td>Personal welcome with <code>?name=</code></td><td>&nbsp;</td><td><span class="chip dropped">dropped</span></td></tr>
+      <tr><td><a href="#s24">2.4</a></td><td>Docker image with the Lambda Web Adapter</td><td><span class="chip pc">Your PC</span><span class="chip dk">Docker</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s25">2.5</a></td><td>GitHub runs the tests and builds the image</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">next</span></td></tr>
+      <tr><td><a href="#s26">2.6</a></td><td>ECR repository in us-east-2; staging rebuilt</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s29">2.9</a></td><td>CloudFront route <code>/api/*</code> to Lambda</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s210">2.10</a></td><td>Deploy workflow updates the function</td><td><span class="chip gh">GitHub</span><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
+    </table></div>
+    <div class="note"><b>Today the API runs only on your PC.</b> Calling <code>/api/hello</code> on the real website would return <b>403 AccessDenied</b> from S3, because AWS has no place to run Python until pieces 2.6 to 2.9 exist. The code is on the GitHub branch <code>step-2</code>; <code>main</code> still holds version 1.</div>
+  </div>
+</section>
+
+<section class="sec" id="need">
+  <div class="sketch" style="--c: var(--teal)">
+    <h2>What we need</h2>
+    <p>Everything from version 1 stays. These pieces are <b>new</b> in version 2.</p>
+    <div class="grid">
+      <div class="sketch card" style="--c: var(--purple)"><h3>FastAPI app</h3><p>One Python file, <code>app/main.py</code>, with the two GET routes. FastAPI handles requests, replies and errors.</p></div>
+      <div class="sketch alt card" style="--c: var(--teal)"><h3>LangChain</h3><p>Builds the welcome from a prompt template. No AI model yet; in step 3 the same template feeds Claude.</p></div>
+      <div class="sketch alt card" style="--c: var(--docker)"><h3>Docker image</h3><p>One box holding Linux, Python 3.13, the packages, the app and the Lambda Web Adapter. <a href="#why-docker">Why we need it</a>.</p></div>
+      <div class="sketch card" style="--c: var(--orange)"><h3>Lambda Web Adapter</h3><p>A small AWS program inside the image that turns each Lambda call into a normal web request.</p></div>
+      <div class="sketch alt card" style="--c: var(--teal)"><h3>ECR repository</h3><p>Private storage for Docker images in AWS (Elastic Container Registry), in us-east-2.</p></div>
+      <div class="sketch card" style="--c: var(--orange)"><h3>Lambda function</h3><p>Runs the image only when a request arrives. No server to look after; you pay per request.</p></div>
+      <div class="sketch alt card" style="--c: var(--blue)"><h3>CloudFront route <code>/api/*</code></h3><p>The existing CloudFront address sends <code>/api/*</code> to Lambda and everything else to S3, as before.</p></div>
+      <div class="sketch card" style="--c: var(--gh)"><h3>GitHub workflows</h3><p>Checks test the code and build the image; Deploy pushes it to ECR and switches Lambda to it.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="architecture">
+  <div class="sketch alt" style="--c: var(--blue)">
+    <h2>Architecture</h2>
+    <p>One public address for both the page and the API. The new pieces are in the <b>us-east-2</b> area. Numbers are explained in the table underneath.</p>
+    <svg class="diagram" viewBox="0 0 1060 560" role="img" aria-label="Version 2 architecture: CloudFront sends the page path to S3 and /api to a Lambda function running a Docker image from ECR">
+      <defs>
+        <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3"/></filter>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2b2b2b"/></marker>
+      </defs>
+      <!-- AWS frame -->
+      <rect x="240" y="14" width="805" height="530" rx="22" fill="#f4f9ff" stroke="#3b7fc4" stroke-width="3" stroke-dasharray="10 7" filter="url(#rough)"/>
+      <text x="260" y="44" class="t-frame">AWS workload account</text>
+      <!-- zones -->
+      <rect x="520" y="58" width="510" height="132" rx="14" fill="#e8f6f4" stroke="#23958a" stroke-width="1.5" stroke-dasharray="5 5"/>
+      <text x="1024" y="182" class="t-zone" text-anchor="end" style="fill:#23958a">US-EAST-1 &#183; VERSION 1</text>
+      <rect x="520" y="230" width="510" height="300" rx="14" fill="#fff4e5" stroke="#e0811f" stroke-width="1.5" stroke-dasharray="5 5"/>
+      <text x="1024" y="250" class="t-zone" text-anchor="end" style="fill:#e0811f">US-EAST-2 &#183; NEW IN VERSION 2</text>
+      <!-- left column -->
+      <rect x="20" y="60" width="190" height="96" rx="16" class="bx" style="stroke:#23958a" filter="url(#rough)"/>
+      <text x="115" y="100" class="t-h" text-anchor="middle">Your PC</text>
+      <text x="115" y="128" class="t-s" text-anchor="middle">Terraform, tests</text>
+      <rect x="20" y="230" width="190" height="96" rx="16" class="bx" style="stroke:#7b5cc4" filter="url(#rough)"/>
+      <text x="115" y="270" class="t-h" text-anchor="middle">Browser</text>
+      <text x="115" y="298" class="t-s" text-anchor="middle">page + /api/hello</text>
+      <rect x="20" y="410" width="190" height="96" rx="16" class="bx" style="stroke:#24292f" filter="url(#rough)"/>
+      <text x="115" y="450" class="t-h" text-anchor="middle">GitHub</text>
+      <text x="115" y="478" class="t-s" text-anchor="middle">builds the image</text>
+      <!-- CloudFront -->
+      <rect x="262" y="200" width="220" height="150" rx="18" class="bx" style="stroke:#3b7fc4" filter="url(#rough)"/>
+      <text x="372" y="236" class="t-h" text-anchor="middle">CloudFront</text>
+      <text x="278" y="266" class="t-s2">one HTTPS address</text>
+      <text x="278" y="292" class="t-s2">/* &#8594; website bucket</text>
+      <text x="278" y="318" class="t-s2">/api/* &#8594; Lambda</text>
+      <!-- S3 -->
+      <rect x="560" y="76" width="200" height="90" rx="14" class="bx" style="stroke:#23958a" filter="url(#rough)"/>
+      <text x="660" y="112" class="t-h" text-anchor="middle">Website bucket</text>
+      <text x="660" y="140" class="t-s" text-anchor="middle">S3: index.html, app.js</text>
+      <rect x="800" y="76" width="200" height="90" rx="14" class="bx" style="stroke:#d24b47" filter="url(#rough)"/>
+      <text x="900" y="112" class="t-h" text-anchor="middle">Health check</text>
+      <text x="900" y="140" class="t-s" text-anchor="middle">alarm + email (v1)</text>
+      <!-- Lambda -->
+      <rect x="560" y="250" width="230" height="120" rx="16" class="bx" style="stroke:#e0811f" filter="url(#rough)"/>
+      <text x="675" y="286" class="t-h" text-anchor="middle">Lambda function</text>
+      <text x="675" y="312" class="t-s2" text-anchor="middle">runs the Docker image</text>
+      <text x="675" y="336" class="t-s2" text-anchor="middle">function URL: CloudFront only</text>
+      <text x="675" y="358" class="t-s" text-anchor="middle">at most 5 at once</text>
+      <!-- ECR -->
+      <rect x="830" y="270" width="180" height="90" rx="14" class="bx" style="stroke:#1d63ed" filter="url(#rough)"/>
+      <text x="920" y="306" class="t-h" text-anchor="middle">ECR</text>
+      <text x="920" y="334" class="t-s" text-anchor="middle">image storage</text>
+      <!-- deploy role -->
+      <rect x="262" y="420" width="220" height="90" rx="14" class="bx" style="stroke:#e0811f" filter="url(#rough)"/>
+      <text x="372" y="456" class="t-h" text-anchor="middle">IAM deploy role</text>
+      <text x="372" y="484" class="t-s" text-anchor="middle">GitHub signs in (OIDC)</text>
+      <rect x="560" y="420" width="230" height="80" rx="14" class="bx" style="stroke:#5d5a55" filter="url(#rough)"/>
+      <text x="675" y="454" class="t-h" text-anchor="middle">CloudWatch Logs</text>
+      <text x="675" y="482" class="t-s" text-anchor="middle">API log lines, 14 days</text>
+      <!-- arrows -->
+      <path d="M210,108 Q240,108 250,40" class="ar"/>
+      <text x="115" y="180" class="t-l" text-anchor="middle">terraform apply</text>
+      <path d="M210,278 L258,278" class="ar"/>
+      <text x="234" y="268" class="t-l" text-anchor="middle">HTTPS</text>
+      <path d="M482,240 C520,200 530,140 556,124" class="ar"/>
+      <text x="520" y="215" class="t-l">/* (OAC)</text>
+      <path d="M482,310 L556,310" class="ar"/>
+      <text x="520" y="300" class="t-l" text-anchor="middle">/api/*</text>
+      <text x="520" y="332" class="t-l" text-anchor="middle">signed</text>
+      <path d="M210,458 L258,458" class="ar"/>
+      <path d="M482,495 C540,530 880,530 920,366" class="ar"/>
+      <text x="840" y="500" class="t-l" text-anchor="middle">push image</text>
+      <path d="M830,315 L794,315" class="ar"/>
+      <text x="812" y="304" class="t-l" text-anchor="middle">image</text>
+      <path d="M675,370 L675,416" class="ar"/>
+      <path d="M800,121 L764,121" class="ar"/>
+      <!-- badges -->
+      <g class="badge"><circle cx="24" cy="234" r="14"/><text x="24" y="240" text-anchor="middle">1</text></g>
+      <g class="badge"><circle cx="266" cy="204" r="14"/><text x="266" y="210" text-anchor="middle">2</text></g>
+      <g class="badge"><circle cx="564" cy="80" r="14"/><text x="564" y="86" text-anchor="middle">3</text></g>
+      <g class="badge"><circle cx="564" cy="254" r="14"/><text x="564" y="260" text-anchor="middle">4</text></g>
+      <g class="badge"><circle cx="834" cy="274" r="14"/><text x="834" y="280" text-anchor="middle">5</text></g>
+      <g class="badge"><circle cx="24" cy="414" r="14"/><text x="24" y="420" text-anchor="middle">6</text></g>
+      <g class="badge"><circle cx="266" cy="424" r="14"/><text x="266" y="430" text-anchor="middle">7</text></g>
+      <g class="badge"><circle cx="564" cy="424" r="14"/><text x="564" y="430" text-anchor="middle">8</text></g>
+      <g class="badge"><circle cx="24" cy="64" r="14"/><text x="24" y="70" text-anchor="middle">9</text></g>
+    </svg>
+    <div class="tablewrap"><table>
+      <tr><th>#</th><th>Piece</th><th>What it does in version 2</th></tr>
+      <tr><td>1</td><td><b>Browser</b></td><td>Opens the page as before. The new button (2.12) calls <code>/api/hello</code> on the same address, so no CORS setup is needed.</td></tr>
+      <tr><td>2</td><td><b>CloudFront</b></td><td>The single front door. Paths starting with <code>/api/</code> go to Lambda; everything else goes to the bucket. Caching is off for the API, and it signs its requests to Lambda (Origin Access Control).</td></tr>
+      <tr><td>3</td><td><b>Website bucket</b></td><td>Version 1's private bucket. It will also hold <code>app.js</code>, the script behind the button.</td></tr>
+      <tr><td>4</td><td><b>Lambda function</b></td><td>Starts a copy of the Docker image when a request arrives and stops paying when idle. Its function URL uses <code>AWS_IAM</code> auth, so only CloudFront may call it; a direct call gets <b>403</b>. Reserved concurrency 5 caps cost and abuse.</td></tr>
+      <tr><td>5</td><td><b>ECR</b></td><td>Private registry holding the images, each tagged with its commit SHA. Scans images on push; keeps only the last few.</td></tr>
+      <tr><td>6</td><td><b>GitHub</b></td><td>Checks: tests and a test build on every push. Deploy: builds the real image on Linux, pushes it, switches Lambda to it, then checks <code>/api/health</code>.</td></tr>
+      <tr><td>7</td><td><b>IAM deploy role</b></td><td>Version 1's role, with new rights: push to this one ECR repository and update this one function. No AWS keys in GitHub.</td></tr>
+      <tr><td>8</td><td><b>CloudWatch Logs</b></td><td>Everything the API prints lands here, kept 14 days.</td></tr>
+      <tr><td>9</td><td><b>Your PC</b></td><td>You write and test the code here and run Terraform for the AWS pieces.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="sec" id="dataflow">
+  <div class="sketch" style="--c: var(--green)">
+    <h2>Data flow</h2>
+    <p>The four journeys in version 2, step by step.</p>
+    <svg class="diagram" viewBox="0 0 1060 600" role="img" aria-label="Data flow: develop, build, deploy, and one API call">
+      <defs>
+        <filter id="rough2"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3"/></filter>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2b2b2b"/></marker>
+      </defs>
+      <g fill="none" stroke="#2b2b2b" stroke-width="2.5">
+        <path d="M200,74 L246,74" marker-end="url(#ah2)"/><path d="M440,74 L486,74" marker-end="url(#ah2)"/><path d="M680,74 L726,74" marker-end="url(#ah2)"/><path d="M920,74 L956,74" marker-end="url(#ah2)"/>
+        <path d="M200,214 L246,214" marker-end="url(#ah2)"/><path d="M440,214 L486,214" marker-end="url(#ah2)"/><path d="M680,214 L726,214" marker-end="url(#ah2)"/><path d="M920,214 L956,214" marker-end="url(#ah2)"/>
+        <path d="M200,354 L246,354" marker-end="url(#ah2)"/><path d="M440,354 L486,354" marker-end="url(#ah2)"/><path d="M680,354 L726,354" marker-end="url(#ah2)"/><path d="M920,354 L956,354" marker-end="url(#ah2)"/>
+        <path d="M200,494 L246,494" marker-end="url(#ah2)"/><path d="M440,494 L486,494" marker-end="url(#ah2)"/><path d="M680,494 L726,494" marker-end="url(#ah2)"/><path d="M920,494 L956,494" marker-end="url(#ah2)"/>
+      </g>
+      <text x="10" y="28" class="t-lane" style="fill:#23958a">1 &#183; Develop (your PC, every change)</text>
+      <rect x="10" y="42" width="190" height="64" rx="14" class="bx" style="stroke:#23958a" filter="url(#rough2)"/><text x="105" y="80" class="t-s2" text-anchor="middle">Edit app/main.py</text>
+      <rect x="250" y="42" width="190" height="64" rx="14" class="bx" style="stroke:#23958a" filter="url(#rough2)"/><text x="345" y="80" class="t-s2" text-anchor="middle">python -m pytest</text>
+      <rect x="490" y="42" width="190" height="64" rx="14" class="bx" style="stroke:#23958a" filter="url(#rough2)"/><text x="585" y="72" class="t-s2" text-anchor="middle">uvicorn on</text><text x="585" y="94" class="t-s2" text-anchor="middle">127.0.0.1:8000</text>
+      <rect x="730" y="42" width="190" height="64" rx="14" class="bx" style="stroke:#1d63ed" filter="url(#rough2)"/><text x="825" y="72" class="t-s2" text-anchor="middle">optional: docker</text><text x="825" y="94" class="t-s2" text-anchor="middle">build and run</text>
+      <rect x="960" y="42" width="90" height="64" rx="14" class="bx" style="stroke:#24292f" filter="url(#rough2)"/><text x="1005" y="80" class="t-s2" text-anchor="middle">git push</text>
+
+      <text x="10" y="168" class="t-lane" style="fill:#24292f">2 &#183; Build (GitHub, every push)</text>
+      <rect x="10" y="182" width="190" height="64" rx="14" class="bx" style="stroke:#24292f" filter="url(#rough2)"/><text x="105" y="220" class="t-s2" text-anchor="middle">Checks starts</text>
+      <rect x="250" y="182" width="190" height="64" rx="14" class="bx" style="stroke:#24292f" filter="url(#rough2)"/><text x="345" y="212" class="t-s2" text-anchor="middle">Python 3.13:</text><text x="345" y="234" class="t-s2" text-anchor="middle">run the tests</text>
+      <rect x="490" y="182" width="190" height="64" rx="14" class="bx" style="stroke:#1d63ed" filter="url(#rough2)"/><text x="585" y="212" class="t-s2" text-anchor="middle">docker build</text><text x="585" y="234" class="t-s2" text-anchor="middle">on Linux</text>
+      <rect x="730" y="182" width="190" height="64" rx="14" class="bx" style="stroke:#1d63ed" filter="url(#rough2)"/><text x="825" y="212" class="t-s2" text-anchor="middle">run it, call</text><text x="825" y="234" class="t-s2" text-anchor="middle">/api/health</text>
+      <rect x="960" y="182" width="90" height="64" rx="14" class="bx" style="stroke:#3a9a5b" filter="url(#rough2)"/><text x="1005" y="220" class="t-s2" text-anchor="middle">green</text>
+
+      <text x="10" y="308" class="t-lane" style="fill:#e0811f">3 &#183; Deploy (GitHub, one click per release)</text>
+      <rect x="10" y="322" width="190" height="64" rx="14" class="bx" style="stroke:#24292f" filter="url(#rough2)"/><text x="105" y="352" class="t-s2" text-anchor="middle">Run workflow,</text><text x="105" y="374" class="t-s2" text-anchor="middle">OIDC sign-in</text>
+      <rect x="250" y="322" width="190" height="64" rx="14" class="bx" style="stroke:#1d63ed" filter="url(#rough2)"/><text x="345" y="352" class="t-s2" text-anchor="middle">build image, tag</text><text x="345" y="374" class="t-s2" text-anchor="middle">commit SHA</text>
+      <rect x="490" y="322" width="190" height="64" rx="14" class="bx" style="stroke:#1d63ed" filter="url(#rough2)"/><text x="585" y="360" class="t-s2" text-anchor="middle">push to ECR</text>
+      <rect x="730" y="322" width="190" height="64" rx="14" class="bx" style="stroke:#e0811f" filter="url(#rough2)"/><text x="825" y="352" class="t-s2" text-anchor="middle">Lambda switches</text><text x="825" y="374" class="t-s2" text-anchor="middle">to the new image</text>
+      <rect x="960" y="322" width="90" height="64" rx="14" class="bx" style="stroke:#3a9a5b" filter="url(#rough2)"/><text x="1005" y="352" class="t-s2" text-anchor="middle">version</text><text x="1005" y="374" class="t-s2" text-anchor="middle">= SHA?</text>
+
+      <text x="10" y="448" class="t-lane" style="fill:#7b5cc4">4 &#183; One API call (every click)</text>
+      <rect x="10" y="462" width="190" height="64" rx="14" class="bx" style="stroke:#7b5cc4" filter="url(#rough2)"/><text x="105" y="492" class="t-s2" text-anchor="middle">Browser: GET</text><text x="105" y="514" class="t-s2" text-anchor="middle">/api/hello</text>
+      <rect x="250" y="462" width="190" height="64" rx="14" class="bx" style="stroke:#3b7fc4" filter="url(#rough2)"/><text x="345" y="492" class="t-s2" text-anchor="middle">CloudFront signs,</text><text x="345" y="514" class="t-s2" text-anchor="middle">calls Lambda</text>
+      <rect x="490" y="462" width="190" height="64" rx="14" class="bx" style="stroke:#e0811f" filter="url(#rough2)"/><text x="585" y="492" class="t-s2" text-anchor="middle">Web Adapter turns it</text><text x="585" y="514" class="t-s2" text-anchor="middle">into an HTTP request</text>
+      <rect x="730" y="462" width="190" height="64" rx="14" class="bx" style="stroke:#7b5cc4" filter="url(#rough2)"/><text x="825" y="492" class="t-s2" text-anchor="middle">FastAPI + LangChain</text><text x="825" y="514" class="t-s2" text-anchor="middle">template</text>
+      <rect x="960" y="462" width="90" height="64" rx="14" class="bx" style="stroke:#3a9a5b" filter="url(#rough2)"/><text x="1005" y="500" class="t-s2" text-anchor="middle">JSON</text>
+      <text x="530" y="580" class="t-l" text-anchor="middle">Lanes 1 and 2 work today (lane 2 from piece 2.5). Lanes 3 and 4 need pieces 2.6 to 2.10.</text>
+    </svg>
+  </div>
+</section>
+
+<section class="sec" id="journey">
+  <div class="sketch alt" style="--c: var(--gold)">
+    <h2>The journey, in 6 stages</h2>
+    <div class="journey">
+      <div class="sketch st" style="--c: var(--teal)"><span class="n">1</span><b>Local API</b>2.0 to 2.3<br><span class="chip done">done</span></div>
+      <div class="sketch alt st" style="--c: var(--docker)"><span class="n">2</span><b>Docker image</b>2.4<br><span class="chip done">done</span></div>
+      <div class="sketch st" style="--c: var(--gh)"><span class="n">3</span><b>GitHub checks</b>2.5<br><span class="chip todo">next</span></div>
+      <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip todo">you run Terraform</span></div>
+      <div class="sketch st" style="--c: var(--orange)"><span class="n">5</span><b>Auto deploy</b>2.10<br><span class="chip todo">planned</span></div>
+      <div class="sketch alt st" style="--c: var(--purple)"><span class="n">6</span><b>Page + release</b>2.11 to 2.15<br><span class="chip todo">planned</span></div>
+    </div>
+    <p>Stages 1 to 3 happen only on your PC and GitHub, with no AWS cost. From stage 4 on, pieces change AWS, and you run Terraform yourself as in the version 1 guide.</p>
+  </div>
+</section>
+
+<section class="sec" id="decisions">
+  <div class="sketch" style="--c: var(--purple)">
+    <h2>Decisions</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Decision</th><th>Choice</th><th>Why</th></tr>
+      <tr><td>Where the API runs</td><td>AWS Lambda</td><td>No server to patch or keep running; pay per request; the free tier covers a learning project. EC2 or ECS Fargate would bill every hour, even with no visitors.</td></tr>
+      <tr><td>Region for Lambda and ECR</td><td>us-east-2 (Ohio)</td><td>The organization's region rule blocks Lambda in us-east-1 and allows everything in us-east-2, Bedrock included. CloudFront is global, so the site keeps its address.</td></tr>
+      <tr><td>Packaging</td><td>Docker image with the Lambda Web Adapter</td><td>See <a href="#why-docker">Why Docker</a>.</td></tr>
+      <tr><td>Web framework</td><td>FastAPI</td><td>Routes will grow (<code>/api/ask</code>, <code>/api/chat</code>); runs locally as a normal web server; no Lambda-specific code.</td></tr>
+      <tr><td>LangChain now</td><td>Yes, <code>langchain-core</code> only</td><td>Proves LangChain installs, deploys and starts on Lambda before any AI cost. Step 3 swaps the fixed text for a model.</td></tr>
+      <tr><td>Routes</td><td>Two GET routes, no parameters</td><td>A personal <code>?name=</code> welcome was planned (2.3) and dropped to keep the skeleton minimal. FastAPI's <code>/docs</code> pages are off.</td></tr>
+      <tr><td>Who ships code</td><td>GitHub Deploy workflow</td><td>Code follows the same staging gate as the page. Terraform creates the function once and ignores later image changes.</td></tr>
+      <tr><td>Concurrency</td><td>Reserved, 5</td><td>The account allows 400 at once in us-east-2. A cap of 5 is plenty for a hello API and limits runaway cost once step 3 adds AI calls.</td></tr>
+      <tr><td>Load balancer</td><td>None</td><td>CloudFront is the single address and Lambda scales itself. A load balancer bills every hour with no traffic.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="sec" id="read">
+  <div class="sketch alt" style="--c: var(--gold)">
+    <h2>How to read this guide</h2>
+    <p>Each piece answers: <b class="green">what</b> it does, <b class="purple">why</b> it is needed, <b>how</b> to do it, and <b class="green">what you will see</b> when it worked.</p>
+    <p>
+      <span class="chip done">done</span>
+      <span class="chip todo">planned</span>
+      <span class="chip once">ONE TIME</span>
+      <span class="chip every">EVERY CHANGE</span>
+      <span class="chip pc">Your PC</span>
+      <span class="chip gh">GitHub</span>
+      <span class="chip work">AWS workload account</span>
+      <span class="chip dk">Docker</span>
+    </p>
+    <p>Sections marked <span class="chip todo">planned</span> describe the plan; their commands and screenshots are added when each piece is built. Commands are for <b>Windows PowerShell</b> in the project root unless stated.</p>
+  </div>
+</section>
+
+<!-- ===================== WHY DOCKER ===================== -->
+<div class="part" style="--c: var(--docker)"><span class="big">Why Docker</span><span class="line"></span></div>
+
+<section class="sec" id="why-docker">
+  <div class="sketch" style="--c: var(--docker)">
+    <h2>The problem Docker solves</h2>
+    <p style="font-size:24px; line-height:1.35">Our code runs on your PC because your PC has <b>Python 3.13</b>, the <b>packages</b> and the <b>venv</b>. A Lambda function has none of that. Docker packs the code <b class="docker">and everything it needs</b> into one box, called an <b>image</b>, that runs the same everywhere.</p>
+    <div class="two">
+      <div class="note"><b>Think of a lunchbox.</b> Your PC is a kitchen: everything is there, so you can cook anywhere in it. AWS is an empty table. Docker packs the finished meal with its plate and fork, so whoever opens the box gets exactly the same meal.</div>
+      <div class="ok"><b>Image and container.</b> The <b>image</b> is the packed box (a file). A <b>container</b> is that box opened and running. One image can run as many containers as needed: Lambda starts one per busy request slot.</div>
+    </div>
+    <h3>Five reasons we use it</h3>
+    <div class="tablewrap"><table>
+      <tr><th>#</th><th>Reason</th><th>What goes wrong without Docker</th></tr>
+      <tr><td>1</td><td><b>Same box everywhere.</b> The image that passes the tests on GitHub is the exact image Lambda runs.</td><td>"Works on my PC" problems: a different Python or package version on the server.</td></tr>
+      <tr><td>2</td><td><b>Built on Linux, for Linux.</b> Lambda runs Linux. Some packages contain compiled code (for example <code>pydantic-core</code>, used by FastAPI), and the build installs the Linux version.</td><td>Packages zipped on Windows carry Windows-compiled files that crash on Lambda.</td></tr>
+      <tr><td>3</td><td><b>Room to grow.</b> A Lambda image can be up to <b>10 GB</b>.</td><td>A zip upload is limited to <b>250 MB</b> unpacked. RAG libraries in step 4 (embeddings, vector clients) can pass that.</td></tr>
+      <tr><td>4</td><td><b>Locked versions.</b> The Python base image and the adapter are pinned by digest, the packages by version.</td><td>A rebuild next month could quietly pick up different software.</td></tr>
+      <tr><td>5</td><td><b>Not tied to Lambda.</b> The same image runs on your PC, on Lambda, and later on ECS Fargate or EC2 if Lambda's limits (15 minutes per request) are outgrown.</td><td>Moving off Lambda would mean repackaging the app.</td></tr>
+    </table></div>
+    <h3>Options we did not pick</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Option</th><th>Why not</th></tr>
+      <tr><td>Zip file upload to Lambda</td><td>250 MB limit; must be built on Linux anyway; does not run on Fargate or EC2.</td></tr>
+      <tr><td>Lambda layers for the packages</td><td>Same size limit, more moving parts, still Linux-only builds.</td></tr>
+      <tr><td>EC2 server with a venv</td><td>You patch and run a server all day; it bills every hour with no visitors.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="sec" id="image">
+  <div class="sketch alt" style="--c: var(--docker)">
+    <h2>What is inside our image <span class="chip done">built</span></h2>
+    <p>An image is built in <b>layers</b>, bottom to top. Each line of the <code>Dockerfile</code> adds one.</p>
+    <svg class="diagram" viewBox="0 0 1060 400" role="img" aria-label="The layers of the image, from Linux and Python at the bottom to the settings at the top">
+      <defs><filter id="rough4"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3"/></filter></defs>
+      <rect x="40" y="20" width="620" height="60" rx="12" class="bx" style="stroke:#5d5a55" filter="url(#rough4)"/>
+      <text x="60" y="58" class="t-h">Settings</text><text x="200" y="58" class="t-s2">user nobody, port 8000, readiness /api/health, APP_VERSION</text>
+      <rect x="40" y="94" width="620" height="60" rx="12" class="bx" style="stroke:#7b5cc4" filter="url(#rough4)"/>
+      <text x="60" y="132" class="t-h">Our app</text><text x="200" y="132" class="t-s2">app/main.py (copied last: changes most often)</text>
+      <rect x="40" y="168" width="620" height="60" rx="12" class="bx" style="stroke:#23958a" filter="url(#rough4)"/>
+      <text x="60" y="206" class="t-h">Packages</text><text x="200" y="206" class="t-s2">fastapi, uvicorn, langchain-core (pip install)</text>
+      <rect x="40" y="242" width="620" height="60" rx="12" class="bx" style="stroke:#e0811f" filter="url(#rough4)"/>
+      <text x="60" y="280" class="t-h">Web Adapter</text><text x="200" y="280" class="t-s2">AWS Lambda Web Adapter 1.1.0, /opt/extensions</text>
+      <rect x="40" y="316" width="620" height="60" rx="12" class="bx" style="stroke:#1d63ed" filter="url(#rough4)"/>
+      <text x="60" y="354" class="t-h">Base</text><text x="200" y="354" class="t-s2">python:3.13-slim (Debian Linux + Python 3.13.18)</text>
+      <text x="700" y="60" class="t-l">top</text>
+      <path d="M690,80 L690,340" stroke="#2b2b2b" stroke-width="2.5" fill="none" stroke-dasharray="6 6"/>
+      <text x="700" y="350" class="t-l">bottom</text>
+      <text x="740" y="150" class="t-s2">Only changed layers</text>
+      <text x="740" y="174" class="t-s2">are rebuilt and uploaded.</text>
+      <text x="740" y="210" class="t-s2">Editing main.py rebuilds</text>
+      <text x="740" y="234" class="t-s2">one small layer, not the</text>
+      <text x="740" y="258" class="t-s2">whole 281 MB.</text>
+    </svg>
+    <pre><code><span class="c"># Dockerfile (shortened; the full file is in the project root)</span>
+FROM python:3.13-slim@sha256:7249d558...                      <span class="c"># base, pinned by digest</span>
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0@sha256:17cfd08e... \
+     /lambda-adapter /opt/extensions/lambda-adapter          <span class="c"># the adapter</span>
+ENV PORT=8000 AWS_LWA_READINESS_CHECK_PATH=/api/health
+COPY app/requirements.txt app/requirements.txt
+RUN pip install --no-cache-dir -r app/requirements.txt       <span class="c"># packages</span>
+COPY app/ app/                                               <span class="c"># our code</span>
+ARG APP_VERSION=local
+ENV APP_VERSION=${APP_VERSION}                               <span class="c"># commit SHA for /api/health</span>
+USER nobody                                                  <span class="c"># not root</span>
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
+    <p><code>.dockerignore</code> sends <b>only</b> the <code>app/</code> folder to the build, so tests, docs, Terraform and <code>.git</code> never enter the image.</p>
+  </div>
+</section>
+
+<section class="sec" id="adapter">
+  <div class="sketch" style="--c: var(--orange)">
+    <h2>The Lambda Web Adapter</h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>A small program from AWS, copied into <code>/opt/extensions</code> in the image.</div>
+      <div class="w-why"><b class="l">WHY</b>Lambda does not send normal web requests; it sends <b>events</b>. FastAPI only understands web requests. The adapter translates between the two.</div>
+      <div class="w-see"><b class="l">RESULT</b>The app has <b>no Lambda-specific code</b>. The same <code>uvicorn app.main:app</code> runs on your PC and on Lambda.</div>
+    </div>
+    <ol class="steps" style="--c: var(--orange)">
+      <li>Lambda starts the container. The adapter starts with it, and uvicorn starts the app on port 8000.</li>
+      <li>The adapter calls <code>/api/health</code> until it answers. Only then does Lambda send requests (readiness check).</li>
+      <li>For each Lambda event, the adapter makes a normal HTTP request to <code>127.0.0.1:8000</code> and turns the reply back into a Lambda response.</li>
+      <li>Outside Lambda (your PC, Fargate), the adapter stays idle and uvicorn answers directly.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="sec" id="docker-pc">
+  <div class="sketch alt" style="--c: var(--teal)">
+    <h2>Do you need Docker on your PC?</h2>
+    <p><b>No.</b> Day to day, you run the app straight from the venv. Docker is how the app is <b>packaged for AWS</b>, and GitHub can do that packaging (pieces 2.5 and 2.7).</p>
+    <div class="tablewrap"><table>
+      <tr><th>Task</th><th>Where it runs</th><th>Docker on your PC?</th></tr>
+      <tr><td>Write and try the API</td><td>venv + <code>uvicorn app.main:app</code> on port 8000</td><td>No</td></tr>
+      <tr><td>Run the tests</td><td>venv + <code>python -m pytest</code></td><td>No</td></tr>
+      <tr><td>Build the image and check it starts</td><td>GitHub Checks (2.5)</td><td>No</td></tr>
+      <tr><td>Build and push the image to ECR</td><td>GitHub Deploy (2.7, 2.10)</td><td>No</td></tr>
+      <tr><td>Terraform</td><td>Your PC</td><td>No</td></tr>
+      <tr><td>Try the image locally before pushing</td><td>Docker Desktop</td><td>Optional</td></tr>
+    </table></div>
+    <div class="note">Docker Desktop opens a window and runs a small Linux virtual machine while it is on. Quit it from the system tray when you are not building images. In Settings &rsaquo; General you can stop it opening the dashboard at start.</div>
+  </div>
+</section>
+
+<!-- ===================== 1 ON YOUR PC ===================== -->
+<div class="part" style="--c: var(--teal)"><span class="big">1 &middot; On your PC</span><span class="line"></span></div>
+
+<section class="sec" id="s20">
+  <div class="sketch" style="--c: var(--teal)">
+    <h2><span class="num" style="--c: var(--teal)">2.0</span>Get ready <span class="chip done">done</span><span class="chip once">ONE TIME</span><span class="chip pc">Your PC</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>Confirm the decisions, check Lambda's limit in us-east-2, create a Python 3.13 venv outside the repository.</div>
+      <div class="w-why"><b class="l">WHY</b>The venv keeps this project's packages apart from everything else on the PC.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b><code>python --version</code> prints 3.13, and the limit shows <code>"ConcurrentExecutions": 400</code>.</div>
+    </div>
+<pre><code><span class="c"># Lambda limit in us-east-2 (400 here, so reserving 5 is allowed)</span>
+aws lambda get-account-settings --region us-east-2
+<span class="c"># The venv, outside the repository</span>
+py -3.13 -m venv $env:USERPROFILE\venvs\one-step
+&amp; $env:USERPROFILE\venvs\one-step\Scripts\Activate.ps1
+python --version            <span class="g"># Python 3.13.5</span></code></pre>
+  </div>
+</section>
+
+<section class="sec" id="s21">
+  <div class="sketch alt" style="--c: var(--purple)">
+    <h2><span class="num" style="--c: var(--purple)">2.1</span><span class="num" style="--c: var(--purple)">2.2</span>The API: health and hello <span class="chip done">done</span><span class="chip every">EVERY CHANGE</span><span class="chip pc">Your PC</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>A FastAPI app in one file with <code>GET /api/health</code> and <code>GET /api/hello</code>, plus three tests.</div>
+      <div class="w-why"><b class="l">WHY</b>Health tells the deploy which commit is live. Hello proves the request path and LangChain work end to end.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b><code>3 passed</code>, and the JSON replies in the browser.</div>
+    </div>
+<pre><code><span class="c"># app/main.py</span>
+WELCOME = PromptTemplate.from_template(
+    "Welcome to the agentic world! This is {app_name}, where we build a RAG "
+    "and agent app step by step."
+)
+<span class="c"># No /docs, /redoc or /openapi.json: only the two routes below exist.</span>
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "version": os.environ.get("APP_VERSION") or "local"}
+
+@app.get("/api/hello")
+def hello(response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return {"message": WELCOME.format(app_name="One Step At A Time")}</code></pre>
+    <h3>Why the version in <code>/api/health</code>?</h3>
+    <p>After a deploy, the workflow calls <code>/api/health</code> and checks that <code>version</code> equals the commit it just built. "status ok" alone cannot tell old code from new: a failed update or a still-warm old copy would also answer ok. On your PC there is no build, so it says <code>local</code>.</p>
+    <h3>Run it</h3>
+<pre><code><span class="c"># Once per terminal: activate the venv, install the packages</span>
+&amp; $env:USERPROFILE\venvs\one-step\Scripts\Activate.ps1
+python -m pip install -r requirements-dev.txt
+<span class="c"># Tests</span>
+python -m pytest            <span class="g"># 3 passed</span>
+<span class="c"># Local server (Ctrl+C stops it)</span>
+uvicorn app.main:app --reload</code></pre>
+    <p class="see-label">You'll see, at http://127.0.0.1:8000:</p>
+<pre><code>/api/health   <span class="g">{"status":"ok","version":"local"}</span>
+/api/hello    <span class="g">{"message":"Welcome to the agentic world! This is One Step At A Time, where we build a RAG and agent app step by step."}</span>
+/docs         <span class="r">{"detail":"Not Found"}  404</span></code></pre>
+  </div>
+</section>
+
+<section class="sec" id="s23">
+  <div class="sketch" style="--c: var(--muted)">
+    <h2><span class="num" style="--c: var(--muted)">2.3</span>Name parameter <span class="chip dropped">dropped</span></h2>
+    <p>The plan had <code>/api/hello?name=Ada</code> return a personal welcome, with name checks, a 422 error for bad names, and logs that never record the name. It was dropped on 26 November 2026: nothing sends a name, so the API stays at two plain GET routes. The welcome text no longer mentions <code>?name=</code>.</p>
+  </div>
+</section>
+
+<section class="sec" id="s24">
+  <div class="sketch alt" style="--c: var(--docker)">
+    <h2><span class="num" style="--c: var(--docker)">2.4</span>Docker image <span class="chip done">done</span><span class="chip pc">Your PC</span><span class="chip dk">Docker</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b><code>Dockerfile</code> and <code>.dockerignore</code> in the project root; build the image and run it once.</div>
+      <div class="w-why"><b class="l">WHY</b>Proves the box works before AWS sees it. See <a href="#why-docker">Why Docker</a>.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>An image of about 281 MB, and the same JSON replies from the container.</div>
+    </div>
+    <div class="check"><b class="hd">Check first:</b> Docker Desktop must be running. If <code>docker info</code> says <code>dockerDesktopLinuxEngine ... cannot find the file</code>, start Docker Desktop and wait until it says it is running.</div>
+<pre><code><span class="c"># Build. The --secret is needed only behind Zscaler (see the warning below)</span>
+docker build --secret "id=ca,src=$env:USERPROFILE\certs\zscaler-ca-bundle.pem" `
+  --build-arg APP_VERSION=local -t one-step-api .
+<span class="c"># Run. Port 8000 is used by the dev server, so the container is on 8001</span>
+docker run --rm -p 8001:8000 one-step-api</code></pre>
+    <p class="see-label">You'll see, at http://127.0.0.1:8001 (checked on 26 November 2026):</p>
+<pre><code>/api/health   <span class="g">{"status":"ok","version":"local"}</span>     <span class="c"># the build argument</span>
+/api/hello    <span class="g">{"message":"Welcome to the agentic world! ..."}</span>
+/docs         <span class="r">404</span>
+id            <span class="g">uid=65534(nobody)</span>                      <span class="c"># not root</span>
+python        <span class="g">Python 3.13.18</span></code></pre>
+    <div class="warn"><b>Zscaler on this PC.</b> The first build failed with <code>CERTIFICATE_VERIFY_FAILED</code> in <code>pip install</code>. Zscaler inspects HTTPS and re-signs every site with its own root certificate. Windows trusts that root; the Linux container does not. The fix: a CA bundle (the public authorities plus the Zscaler root) at <code>%USERPROFILE%\certs\zscaler-ca-bundle.pem</code>, handed to the build as a <b>secret</b>. Only pip uses it, and it is not stored in the image. Without the secret the build works as normal, so GitHub needs nothing. Do not switch certificate checking off instead: that would also hide a real attack.</div>
+  </div>
+</section>
+
+<!-- ===================== 2 ON GITHUB ===================== -->
+<div class="part" style="--c: var(--gh)"><span class="big">2 &middot; On GitHub</span><span class="line"></span></div>
+
+<section class="sec" id="s25">
+  <div class="sketch" style="--c: var(--gh)">
+    <h2><span class="num" style="--c: var(--gh)">2.5</span>Checks on GitHub <span class="chip todo">next</span><span class="chip gh">GitHub</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>A new job in <code>.github/workflows/checks.yml</code>: Python 3.13, install, <code>python -m pytest</code>, then <code>docker build</code> (no push) and a start-up check of <code>/api/health</code>. Actions pinned by commit SHA.</div>
+      <div class="w-why"><b class="l">WHY</b>Every push and pull request proves the code and the image still work, with no Docker on your PC.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>Every job in the <b>Checks</b> run is green.</div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s27">
+  <div class="sketch alt" style="--c: var(--gh)">
+    <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip todo">planned</span><span class="chip gh">GitHub</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>A Deploy job that builds the image on Linux, tags it with the commit SHA and pushes it to ECR. A run option, "image only", stops after the push.</div>
+      <div class="w-why"><b class="l">WHY</b>The Lambda function (2.8) can only be created from an image that already exists in ECR.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>ECR lists an image tagged with the commit SHA.</div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s210">
+  <div class="sketch" style="--c: var(--gh)">
+    <h2><span class="num" style="--c: var(--gh)">2.10</span>Deploy the API from GitHub <span class="chip todo">planned</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>The deploy role may update this one function (Terraform). After pushing the image, the workflow switches the function to it, waits, checks <code>/api/health</code> shows this commit and <code>/api/hello</code> answers; then deploys the page as before.</div>
+      <div class="w-why"><b class="l">WHY</b>Code becomes a release like the page: one click, checked automatically.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>A green Deploy run, and <code>/api/health</code> showing that run's commit.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3 ON AWS ===================== -->
+<div class="part" style="--c: var(--blue)"><span class="big">3 &middot; On AWS (you run Terraform)</span><span class="line"></span></div>
+
+<section class="sec" id="s26">
+  <div class="sketch alt" style="--c: var(--blue)">
+    <h2><span class="num" style="--c: var(--blue)">2.6</span>Region and image registry <span class="chip todo">planned</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>A second Terraform AWS provider for us-east-2; a private ECR repository (scan on push, keep the last few images); the deploy role may push to it; GitHub variable <code>API_ECR_REPOSITORY</code>.</div>
+      <div class="w-why"><b class="l">WHY</b>Lambda must be in us-east-2 (region rule), and it can only pull images from ECR in its own region.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>The apply succeeds and the empty repository appears in <span class="path">ECR &rsaquo; Private repositories</span> (us-east-2).</div>
+    </div>
+    <div class="warn"><b>Staging was destroyed</b> after version 1, so this apply also rebuilds the 15 version 1 resources. Afterwards update <code>SITE_BUCKET</code> and <code>WEBSITE_URL</code> in GitHub, confirm the new alert email, and run the deploy once for the page.</div>
+  </div>
+</section>
+
+<section class="sec" id="s28">
+  <div class="sketch" style="--c: var(--orange)">
+    <h2><span class="num" style="--c: var(--orange)">2.8</span>The Lambda function <span class="chip todo">planned</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>Execution role (logs only), log group (14 days), function from the image (<code>package_type = "Image"</code>, x86_64, reserved concurrency 5, later image changes ignored), function URL with <code>AWS_IAM</code> auth. GitHub variables <code>API_FUNCTION_NAME</code> and <code>API_REGION</code>.</div>
+      <div class="w-why"><b class="l">WHY</b>This is where the API runs. The role can only write logs, nothing else.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>The function is <b>Active</b> in the Lambda console (us-east-2), and calling its URL directly returns <b>403</b>.</div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s29">
+  <div class="sketch alt" style="--c: var(--blue)">
+    <h2><span class="num" style="--c: var(--blue)">2.9</span>The CloudFront route <span class="chip todo">planned</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>A Lambda-type Origin Access Control, CloudFront's permission to invoke the function, and an <code>/api/*</code> behavior (caching off, Host header not forwarded, same security headers).</div>
+      <div class="w-why"><b class="l">WHY</b>One public address for page and API; the function stays private.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>The JSON replies through the website address, while the function URL alone still returns 403.</div>
+    </div>
+<pre><code>curl.exe -sS "https://d****.cloudfront.net/api/health"
+curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
+    <div class="note"><b>Known limit for step 3:</b> POST requests through CloudFront's signing to Lambda need the page to send a SHA-256 hash of the body (<code>x-amz-content-sha256</code>). Not needed for the two GET routes.</div>
+  </div>
+</section>
+
+<!-- ===================== 4 PAGE AND RELEASE ===================== -->
+<div class="part" style="--c: var(--purple)"><span class="big">4 &middot; Page and release</span><span class="line"></span></div>
+
+<section class="sec" id="s211">
+  <div class="sketch" style="--c: var(--purple)">
+    <h2><span class="num" style="--c: var(--purple)">2.11</span><span class="num" style="--c: var(--purple)">2.12</span>The page calls the API <span class="chip todo">planned</span></h2>
+    <ol class="steps" style="--c: var(--purple)">
+      <li><b>2.11, Terraform:</b> the page's security policy allows its own script and its own API (<code>script-src 'self'; connect-src 'self'</code>); the deploy role may upload <code>app.js</code>. The page looks unchanged.</li>
+      <li><b>2.12, code:</b> <code>web/index.html</code> gets a button and a result line (the title stays <b>One Step At A Time</b>, which the health check looks for). <code>web/app.js</code> calls <code>/api/hello</code> and shows the reply with <code>textContent</code>, never <code>innerHTML</code>. The Deploy workflow uploads and checks <code>app.js</code>.</li>
+    </ol>
+    <p class="see-label">Done when:</p>
+    <p>The button shows the welcome, the browser console has no security-policy errors, and the version 1 health-check alarm stays OK.</p>
+  </div>
+</section>
+
+<section class="sec" id="s213">
+  <div class="sketch alt" style="--c: var(--gold)">
+    <h2><span class="num" style="--c: var(--gold)">2.13</span>to<span class="num" style="--c: var(--gold)">2.15</span>Docs and release <span class="chip todo">planned</span></h2>
+    <ol class="steps" style="--c: var(--gold)">
+      <li><b>2.13:</b> README, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code> and this guide get the real commands and screenshots for 2.5 to 2.12; resource counts updated everywhere.</li>
+      <li><b>2.14:</b> <code>docs/coding-agent-prompt.md</code> rebuilds this version (version 1's prompt stays in tag <code>v1.0.0</code>).</li>
+      <li><b>2.15:</b> merge <code>step-2</code> into <code>main</code>, wait for Checks, tag <code>v2.0.0</code>. Production stays for step 6.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== 5 REFERENCE ===================== -->
+<div class="part" style="--c: var(--gold)"><span class="big">5 &middot; Reference</span><span class="line"></span></div>
+
+<section class="sec" id="files">
+  <div class="sketch" style="--c: var(--teal)">
+    <h2>Files in the repository</h2>
+    <div class="tablewrap"><table>
+      <tr><th>File</th><th>What it is</th><th>Status</th></tr>
+      <tr><td><code>app/main.py</code></td><td>The whole API: two routes and the LangChain template</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>app/requirements.txt</code></td><td>Run-time packages, pinned: fastapi 0.165.0, uvicorn 0.54.0, langchain-core 1.8.5</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>requirements-dev.txt</code></td><td>Adds pytest 9.2.0 and httpx2 2.16.2 (FastAPI's test client)</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>tests/test_main.py</code></td><td>Health, hello, and 404 for everything else</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>pyproject.toml</code></td><td>pytest settings only</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip todo">not committed yet</span></td></tr>
+      <tr><td><code>TODO.md</code></td><td>The step 2 plan, piece by piece</td><td><span class="chip done">on step-2</span></td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="sec" id="trouble">
+  <div class="sketch alt" style="--c: var(--red)">
+    <h2>Errors we hit and the fixes</h2>
+    <div class="tablewrap"><table>
+      <tr><th>What you see</th><th>Cause</th><th>Fix</th></tr>
+      <tr><td><code>pip install</code> in <code>docker build</code>: <code>CERTIFICATE_VERIFY_FAILED ... unable to get local issuer certificate</code>, then <code>No matching distribution found</code></td><td>Zscaler re-signs HTTPS; the container does not trust its root</td><td>Build with <code>--secret id=ca,src=...zscaler-ca-bundle.pem</code> (<a href="#s24">2.4</a>).</td></tr>
+      <tr><td><code>docker info</code>: <code>open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified</code></td><td>Docker Desktop is not running</td><td>Start Docker Desktop and wait for "running".</td></tr>
+      <tr><td><code>uvicorn --reload</code> prints <i>Reloading...</i> and keeps serving old code</td><td>On Windows, uvicorn restarts its worker with a Ctrl+C console signal; a server started in the background without a console never receives it</td><td>Stop the server and start it again. In your own terminal, <code>--reload</code> normally works.</td></tr>
+      <tr><td>pytest warning: <code>Using httpx with starlette.testclient is deprecated; install httpx2</code></td><td>Starlette changed its test client's HTTP library</td><td><code>httpx2</code> in <code>requirements-dev.txt</code>.</td></tr>
+      <tr><td><code>/docs</code>, <code>/redoc</code>, <code>/openapi.json</code> answer 200</td><td>FastAPI adds these pages by default</td><td><code>FastAPI(docs_url=None, redoc_url=None, openapi_url=None)</code>.</td></tr>
+      <tr><td><code>docker run -p 8000:8000</code> fails: port in use</td><td>The dev server already uses 8000</td><td>Map another port: <code>-p 8001:8000</code>.</td></tr>
+      <tr><td>Commits made as the wrong person</td><td>The global Git identity differs from this repository's</td><td>Commit with this repository's own <code>user.name</code> and <code>user.email</code>; check <code>git log --format="%an %ae"</code> before pushing.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section class="sec" id="costs">
+  <div class="sketch" style="--c: var(--gold)">
+    <h2>Costs <span class="chip todo">estimate</span></h2>
+    <p>Nothing in pieces 2.0 to 2.5 costs money. The new AWS pieces, at learning-project traffic:</p>
+    <div class="tablewrap"><table>
+      <tr><th>Item</th><th>Price (check the AWS pricing pages before relying on it)</th></tr>
+      <tr><td>Lambda</td><td>Always free each month: 1 million requests and 400,000 GB-seconds of compute. A hello API stays far below that.</td></tr>
+      <tr><td>ECR storage</td><td>About $0.10 per GB per month. A few images of under 300 MB each: cents per month. Keeping only the last few images keeps it there.</td></tr>
+      <tr><td>CloudWatch Logs</td><td>Pay per GB stored and ingested; a few log lines per request is tiny. Kept 14 days.</td></tr>
+      <tr><td>CloudFront</td><td>Unchanged from version 1: 10 million requests and 1 TB a month always free.</td></tr>
+      <tr><td>Version 1 pieces</td><td>About $2 to $6 a month while running (mostly the Route 53 health check), covered by credits.</td></tr>
+    </table></div>
+    <p><b>Expected total:</b> version 1's cost plus well under $1 a month for the API, until step 3 adds AI calls.</p>
+  </div>
+</section>
+
+<section class="sec" id="cleanup">
+  <div class="sketch alt" style="--c: var(--ink)">
+    <h2>Clean up <span class="chip todo">planned</span></h2>
+    <p>Same steps as the version 1 guide's teardown (pause deploys, <code>terraform plan -destroy</code>, review, apply), with one extra point:</p>
+    <div class="warn"><b>ECR first.</b> AWS will not delete a repository that still holds images. Either delete the images before <code>terraform destroy</code>, or mark the repository force-delete in Terraform. This is decided in piece 2.13.</div>
+    <h3>On your PC</h3>
+<pre><code><span class="c"># Remove the local image (Docker Desktop running)</span>
+docker image rm one-step-api
+<span class="c"># Remove the venv if you no longer need it</span>
+Remove-Item -Recurse $env:USERPROFILE\venvs\one-step</code></pre>
+  </div>
+</section>
+
+<section class="sec" id="later">
+  <div class="sketch" style="--c: var(--purple)">
+    <h2>Later steps</h2>
+    <div class="tablewrap"><table>
+      <tr><th>Step</th><th>What it adds to this skeleton</th></tr>
+      <tr><td>3 &middot; First AI answer</td><td><code>POST /api/ask</code> calls Claude, streamed. The LangChain template from version 2 feeds the model. Protection (login or rate limit) and a budget alarm come first.</td></tr>
+      <tr><td>4 &middot; RAG</td><td>Documents in S3, embeddings, a vector store, answers with citations. The Docker image's 10 GB room matters here.</td></tr>
+      <tr><td>5 &middot; Agent</td><td>A LangGraph agent with tools and conversation memory.</td></tr>
+      <tr><td>6 &middot; Production</td><td>Login, firewall, alarms, production promotion.</td></tr>
+      <tr><td>If Lambda is outgrown</td><td>Jobs over 15 minutes or always-on workers: the same image moves to ECS Fargate.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+</main>
+</div>
+<script>
+  (function () {
+    var nav = document.getElementById('nav');
+    var btn = document.getElementById('menuBtn');
+    btn.addEventListener('click', function () { nav.classList.toggle('open'); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { nav.classList.remove('open'); } });
+    var links = Array.prototype.slice.call(nav.querySelectorAll('a'));
+    links.forEach(function (a) { a.addEventListener('click', function () { nav.classList.remove('open'); }); });
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+    if ('IntersectionObserver' in window) {
+      var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting && byId[en.target.id]) {
+            links.forEach(function (a) { a.classList.remove('active'); });
+            byId[en.target.id].classList.add('active');
+            var r = byId[en.target.id].getBoundingClientRect();
+            if (r.top < 60 || r.bottom > window.innerHeight - 40) { byId[en.target.id].scrollIntoView({ block: 'nearest' }); }
+          }
+        });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      document.querySelectorAll('section.sec[id]').forEach(function (s) { obs.observe(s); });
+    }
+  })();
+</script>
+</body>
+</html>
