@@ -1,0 +1,5 @@
+# Local development and CI: the app's packages plus the test tools.
+-r app/requirements.txt
+pytest==9.2.0
+# FastAPI's TestClient needs an HTTP client; Starlette now expects httpx2.
+httpx2==2.16.2

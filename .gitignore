@@ -8,5 +8,7 @@
 !*.example.hcl
 !*.example.tfvars
 __pycache__/
+.pytest_cache/
+.venv/
 .sf/
 .DS_Store

@@ -1,0 +1,4 @@
+# Tool settings only; the app is not packaged or installed.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
