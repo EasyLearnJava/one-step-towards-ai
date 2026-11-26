@@ -216,7 +216,7 @@
       <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">code ready, tested locally: same apply + Deploy run</span></td></tr>
       <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">docs written; tag after your checks</span></td></tr>
     </table></div>
-    <div class="note"><b>Today the API runs only on your PC</b> (dev server on port 8000, Docker container on port 8001). Calling <code>/api/hello</code> on the real website would return <b>403 AccessDenied</b> from S3, because AWS has no place to run Python until pieces 2.6 to 2.9 exist. All work goes straight onto <code>main</code> (no feature branches). Deploy is a manual click, so pushing to <code>main</code> never puts anything live by itself.</div>
+    <div class="note"><b>Today the API is live on the website</b> (since 2.9): <code>https://d****.cloudfront.net/api/health</code> and <code>/api/hello</code> answer through CloudFront from Lambda, running commit <code>9d044a6</code>. Locally it also runs on your PC (dev server on port 8000, Docker container on port 8001). <b>What is not live yet:</b> the button (2.12) and the automatic switch of Lambda to new code (2.10). Both need the one Terraform apply and one full Deploy run in <a href="#apply-run">2.10 to 2.12</a>; after that, tag <code>v2.0.0</code> (<a href="#s213">2.15</a>). All work goes straight onto <code>main</code> (no feature branches). Deploy is a manual click, so pushing to <code>main</code> never puts anything live by itself.</div>
   </div>
 </section>
 
@@ -588,7 +588,7 @@
       <span class="chip work">AWS workload account</span>
       <span class="chip dk">Docker</span>
     </p>
-    <p>Sections marked <span class="chip todo">planned</span> describe the plan; their commands and screenshots are added when each piece is built. Commands are for <b>Windows PowerShell</b> in the project root unless stated.</p>
+    <p>An orange chip (<span class="chip todo">planned</span>, <span class="chip todo">your turn</span>, <span class="chip todo">code ready</span>) marks a piece that is not finished yet; its text says exactly what is left. Commands are for <b>Windows PowerShell</b> in the project root unless stated.</p>
   </div>
 </section>
 
@@ -830,16 +830,17 @@ git push</code></pre>
   <div class="sketch alt" style="--c: var(--gh)">
     <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip done">done</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
     <div class="ok"><b>Result (26 November 2026):</b> the second "image only" run, for commit <code>9d044a6</code>, pushed <b>one plain image</b>: Docker v2 manifest, about 65 MB, tagged with the full SHA, with no index or attestation beside it. The scan on push completed: <b>9 HIGH, 5 MEDIUM, 2 undefined</b> findings, typical for packages in the Debian base image. Not blocking for a hello API; worth a review before step 3 (open the image &rsaquo; <span class="path">Vulnerabilities</span>).</div>
-    <div class="warn"><b>What happened on the first run:</b> the image for commit <code>fb5a197</code> arrived, but as <b>three</b> ECR entries: a tagged <i>image index</i>, the real image (untagged, about 65 MB) and a small untagged <i>attestation</i>. GitHub's Docker builder adds a provenance attestation by default, which turns the push into an index. Lambda does not accept an index, and the keep-5 rule would count the parts separately. <b>Fix:</b> the workflow now builds with <code>--provenance=false</code>, which pushes one plain image. <b>Run "image only" once more</b> (steps below) after the fix is on <code>main</code>. The three old entries are harmless; the lifecycle rule removes them over time, or delete them in the console.</div>
+    <div class="warn"><b>What happened on the first run:</b> the image for commit <code>fb5a197</code> arrived, but as <b>three</b> ECR entries: a tagged <i>image index</i>, the real image (untagged, about 65 MB) and a small untagged <i>attestation</i>. GitHub's Docker builder adds a provenance attestation by default, which turns the push into an index. Lambda does not accept an index, and the keep-5 rule would count the parts separately. <b>Fix:</b> the workflow now builds with <code>--provenance=false</code>, which pushes one plain image. The second "image only" run, for <code>9d044a6</code>, did that (result above). The three old entries are harmless; the lifecycle rule removes them over time, or delete them in the console.</div>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>A new <code>image</code> job in the <b>Deploy website</b> workflow: builds the image on Linux, tags it with the commit SHA, pushes it to ECR, and checks it arrived. A new run option, <b>image only</b>, stops after the push.</div>
       <div class="w-why"><b class="l">WHY</b>The Lambda function (2.8) can only be created from an image that already exists in ECR. "Image only" is needed because the function does not exist yet.</div>
       <div class="w-see"><b class="l">YOU'LL SEE</b>A green run, and an image in ECR whose tag is the commit SHA.</div>
     </div>
-    <h3>What the workflow does now</h3>
+    <h3>What the workflow did in 2.7</h3>
+    <div class="note">In <a href="#s210">2.10</a> the <code>image</code> job was renamed <code>api</code> and gained the production gate, the switch of the function and the live check. The table below is the 2.7 version.</div>
     <div class="tablewrap"><table>
       <tr><th>Job</th><th>Steps</th><th>Runs when</th></tr>
-      <tr><td><code>image</code> (new)</td><td>Read the registry and region from <code>API_ECR_REPOSITORY</code> &rsaquo; sign in to AWS with OIDC (no keys) &rsaquo; <code>docker login</code> to ECR &rsaquo; <code>docker build</code> with <code>APP_VERSION</code> = commit SHA &rsaquo; <code>docker push</code> as <code>:&lt;commit SHA&gt;</code> &rsaquo; ask ECR for that tag; fail if it is missing</td><td>Every run</td></tr>
+      <tr><td><code>image</code> (new; <code>api</code> since 2.10)</td><td>Read the registry and region from <code>API_ECR_REPOSITORY</code> &rsaquo; sign in to AWS with OIDC (no keys) &rsaquo; <code>docker login</code> to ECR &rsaquo; <code>docker build</code> with <code>APP_VERSION</code> = commit SHA &rsaquo; <code>docker push</code> as <code>:&lt;commit SHA&gt;</code> &rsaquo; ask ECR for that tag; fail if it is missing</td><td>Every run</td></tr>
       <tr><td><code>deploy</code></td><td>Upload <code>index.html</code> and check the live page (unchanged from version 1)</td><td>After <code>image</code> succeeds, unless <b>image only</b> is ticked</td></tr>
     </table></div>
     <div class="note">The image is always built from the commit being deployed, on GitHub's Linux machine; no Zscaler secret is needed there. Like the page, it runs only from <code>main</code>.</div>
@@ -1236,12 +1237,97 @@ curl.exe -sS -I "https://d****.cloudfront.net/" | Select-String content-security
 <section class="sec" id="s213">
   <div class="sketch alt" style="--c: var(--gold)">
     <h2><span class="num" style="--c: var(--gold)">2.13</span>to<span class="num" style="--c: var(--gold)">2.15</span>Docs and release <span class="chip todo">docs written; tag after your checks</span></h2>
+    <div class="tablewrap"><table>
+      <tr><th>Piece</th><th>Status</th><th>What is left</th></tr>
+      <tr><td>2.13 Docs</td><td><span class="chip done">done</span> (commit <code>a8afc7c</code>)</td><td>Nothing. The rebuild order below has not been run end to end yet.</td></tr>
+      <tr><td>2.14 Coding-agent prompt</td><td><span class="chip done">done</span> (commit <code>a8afc7c</code>)</td><td>Nothing. Optional: a full rebuild by another coding agent.</td></tr>
+      <tr><td>2.15 Release</td><td><span class="chip todo">your turn</span></td><td>After the <a href="#apply-run">2.10 to 2.12</a> apply and Deploy run: tag <code>v2.0.0</code> (steps below).</td></tr>
+    </table></div>
+
+    <h3>2.13 &middot; Docs: what each file now covers</h3>
+    <div class="tablewrap"><table>
+      <tr><th>File</th><th>Version 2 content</th></tr>
+      <tr><td><code>README.md</code></td><td>Project structure, start here, run the API on your PC (tests, dev server), Docker (optional), architecture, security boundaries.</td></tr>
+      <tr><td><code>docs/staging-deployment.md</code></td><td>Step by step for staging: the first apply in a new environment (the rebuild procedure), publishing with GitHub, <b>test the API</b>, <b>if the API fails</b>, costs and credits, clean up safely.</td></tr>
+      <tr><td><code>docs/operations.md</code></td><td>Staging and production: the API's live version, logs and rollback; the teardown and verify checklists.</td></tr>
+      <tr><td>This guide</td><td>Like the version 1 guide: app architecture (serve and watch), infrastructure architecture, data flow, at a glance, plus every piece 2.0 to 2.15.</td></tr>
+    </table></div>
+    <div class="tablewrap"><table>
+      <tr><th>Fact recorded in the docs</th><th>Value</th></tr>
+      <tr><td>Resource count</td><td><b>25</b>: 15 from version 1, +2 ECR (repository, lifecycle rule), +5 Lambda (log group, role, role policy, function, function URL), +3 CloudFront to Lambda (access control, two permissions)</td></tr>
+      <tr><td>Teardown</td><td>The repository has <code>force_delete = true</code>, so <code>destroy</code> removes it with its images (<a href="#cleanup">Clean up</a>)</td></tr>
+      <tr><td>Rebuild after a teardown</td><td>Targeted apply of ECR and the deploy role (5), Deploy with image only, then the normal apply (20). The deploy role builds the function's ARN from its name, so it no longer depends on the function. <b>Not yet run end to end.</b></td></tr>
+      <tr><td><code>API_REGION</code></td><td>Optional: the Deploy workflow reads the region from <code>API_ECR_REPOSITORY</code></td></tr>
+    </table></div>
+    <p class="see-label">Done when: the repository checks pass and every link works.</p>
+<pre><code><span class="c"># From the project root, in PowerShell (plain "bash" would usually start WSL)</span>
+&amp; "$env:ProgramFiles\Git\bin\bash.exe" scripts/check-repo.sh
+<span class="g"># six [OK] lines, then: All repository checks passed.</span></code></pre>
+
+    <h3>2.14 &middot; Coding-agent prompt</h3>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b><code>docs/coding-agent-prompt.md</code> now builds <b>version 2</b>: the website, the API, the Docker image, the 25 resources, both workflows and the docs, from one prompt handed to a coding agent.</div>
+      <div class="w-why"><b class="l">WHY</b>Anyone can rebuild the whole project from scratch, and the prompt records every decision in one place.</div>
+      <div class="w-see"><b class="l">OLD VERSION</b>Version 1's prompt stays in tag <code>v1.0.0</code>: <code>git show v1.0.0:docs/coding-agent-prompt.md</code></div>
+    </div>
+    <div class="ok"><b>How it was checked:</b> a scratch repository was rebuilt from the files in the prompt, then: <code>terraform fmt</code> and <code>validate</code> pass; the plan has <b>25</b> resources; <code>pytest</code> <b>3 passed</b>; both workflows parse; the image builds and answers <code>/api/health</code> and <code>/api/hello</code>; <code>check-repo.sh</code> passes. <b>Not done:</b> a full rebuild by another coding agent.</div>
+
+    <h3>2.15 &middot; Release: tag <code>v2.0.0</code> <span class="chip todo">your turn</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h3>
+    <div class="check"><b class="hd">Check first:</b> the <a href="#apply-run">2.10 to 2.12</a> Deploy run is green, the button shows the welcome, the alarm is OK, and <b>Checks</b> is green for the deployed commit (<span class="path">Actions &rsaquo; Checks</span>, filter by branch <code>main</code>).</div>
     <ol class="steps" style="--c: var(--gold)">
-      <li><b>2.13:</b> README, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code> and this guide cover version 2: the API, the Docker image, why us-east-2, how to test, troubleshooting, costs, teardown and the rebuild order. Resource count: <b>25</b> (15 from version 1, +2 ECR, +5 Lambda pieces, +3 CloudFront-to-Lambda).</li>
-      <li><b>2.14:</b> <code>docs/coding-agent-prompt.md</code> builds version 2; version 1's prompt stays in tag <code>v1.0.0</code>.</li>
-      <li><b>2.15:</b> after your Deploy run is green and the button works (above), tag <code>v2.0.0</code> on that commit. Production stays for step 6.</li>
+      <li>Read the commit that is live from <code>/api/health</code>. That is the commit to tag, so the tag marks exactly what was tested.</li>
+      <li>Check the commit is on <code>main</code> and has the repository's own author (not your global Git identity).</li>
+      <li>Create an <b>annotated</b> tag on that commit, like <code>v1.0.0</code>, and push only the tag.</li>
+      <li>Check the tag is on GitHub.</li>
     </ol>
-    <div class="note"><b>Why the tag waits for you:</b> <code>v2.0.0</code> should mark a commit that is known to work live. That needs the 2.10/2.11 apply and a green Deploy run, which only you can do.</div>
+<pre><code><span class="c"># 1. The live commit</span>
+$sha = (curl.exe -sS "https://d****.cloudfront.net/api/health" | ConvertFrom-Json).version
+$sha
+<span class="c"># 2. On main, and the right author</span>
+git fetch origin
+git branch -r --contains $sha          <span class="g"># origin/main</span>
+git log -1 --format="%h %an %ae %s" $sha
+<span class="c"># 3. Tag and push the tag</span>
+git tag -a v2.0.0 -m "Version 2: Python API on Lambda behind CloudFront" $sha
+git push origin v2.0.0
+<span class="c"># 4. On GitHub</span>
+git ls-remote --tags origin v2.0.0     <span class="g"># one line: &lt;sha of the tag&gt; refs/tags/v2.0.0</span></code></pre>
+    <div class="tablewrap"><table>
+      <tr><th>Check</th><th>Where</th><th>Expected</th></tr>
+      <tr><td>Tag exists</td><td>GitHub &rsaquo; <span class="path">Code &rsaquo; Tags</span></td><td><code>v2.0.0</code>, pointing at the deployed commit</td></tr>
+      <tr><td>Checks on that commit</td><td><span class="path">Actions &rsaquo; Checks</span></td><td>Green (<code>validate</code>, <code>api</code>, <code>scripts</code>)</td></tr>
+      <tr><td>Old prompt still reachable</td><td><code>git show v1.0.0:docs/coding-agent-prompt.md</code></td><td>The version 1 prompt</td></tr>
+    </table></div>
+    <div class="note"><b>Why the tag waits for you:</b> <code>v2.0.0</code> should mark a commit that is known to work live. That needs the 2.10/2.11 apply and a green Deploy run, which only you can do. Pushing a tag does not start Checks or Deploy; Checks already ran when the commit reached <code>main</code>. <b>Production</b> is not built yet; promoting to production stays in step 6.</div>
+
+    <h3>Every release after <code>v2.0.0</code></h3>
+    <ol class="steps" style="--c: var(--green)">
+      <li>Change the code (<code>app/</code>, <code>web/</code>), run the <a href="#s25">local checks</a>, commit, push to <code>main</code>; wait for <b>Checks</b> to be green.</li>
+      <li>Infrastructure change (<code>terraform/site/*.tf</code>)? <b>plan</b>, review, <b>apply</b> first.</li>
+      <li><span class="path">Actions &rsaquo; Deploy website &rsaquo; Run workflow</span>: <code>main</code>, <code>staging</code>, image only <b>not</b> ticked. It ships the API, then the page.</li>
+      <li>Check <code>/api/health</code> shows the new commit, the button works, and the alarm is OK.</li>
+    </ol>
+
+    <h3>Live version, logs and rollback</h3>
+<pre><code><span class="c"># Which commit is live? Compare with git log</span>
+curl.exe -sS "https://d****.cloudfront.net/api/health"
+git log --oneline -5
+<span class="c"># The API's logs, last hour (region us-east-2, kept 14 days)</span>
+aws logs tail /aws/lambda/one-step-staging-api --region us-east-2 --since 1h</code></pre>
+    <p>Each request ends with a <code>REPORT</code> line (duration, memory used); a cold start adds <code>Init Duration</code>.</p>
+    <p><b>Roll back the API</b>, two ways:</p>
+    <ol class="steps" style="--c: var(--red)">
+      <li><b>Through GitHub (preferred):</b> open an earlier green <b>Deploy website</b> run from version 2 on and click <b>Re-run all jobs</b>. It uses that run's commit, so it rebuilds and ships the older image <b>and</b> page, and checks them.</li>
+      <li><b>Directly</b>, with your own AWS login: point the function at an older image still in ECR (only the newest 5 are kept). This changes the API only, not the page. Terraform ignores image changes, so it shows no drift; the next Deploy run replaces it.</li>
+    </ol>
+<pre><code><span class="c"># Images, newest last, with commit tag and digest</span>
+aws ecr describe-images --repository-name one-step-staging-api --region us-east-2 `
+  --query "sort_by(imageDetails,&amp;imagePushedAt)[].[imageTags[0],imageDigest,imagePushedAt]" --output table
+<span class="c"># Switch to the chosen image and wait</span>
+aws lambda update-function-code --function-name one-step-staging-api --region us-east-2 `
+  --image-uri "****.dkr.ecr.us-east-2.amazonaws.com/one-step-staging-api@sha256:&lt;older digest&gt;"
+aws lambda wait function-updated --function-name one-step-staging-api --region us-east-2
+<span class="c"># Then /api/health must show the older commit</span></code></pre>
   </div>
 </section>
 
@@ -1260,13 +1346,13 @@ curl.exe -sS -I "https://d****.cloudfront.net/" | Select-String content-security
       <tr><td><code>pyproject.toml</code></td><td>pytest settings only</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>.github/workflows/checks.yml</code></td><td>New <code>api</code> job: tests, image build, start-up check (2.5)</td><td><span class="chip done">on main</span></td></tr>
-      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and lifecycle rule (2.6), Lambda function, log group, execution role, function URL (2.8), all applied; CloudFront access control and the two invoke permissions (2.9)</td><td><span class="chip done">2.6, 2.8 applied</span> <span class="chip todo">2.9 part not applied, not committed</span></td></tr>
+      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and lifecycle rule (2.6), Lambda function, log group, execution role, function URL (2.8), all applied; CloudFront access control and the two invoke permissions (2.9)</td><td><span class="chip done">on main, 2.6, 2.8, 2.9 applied</span></td></tr>
       <tr><td><code>terraform/site/versions.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider (2.6); outputs for ECR, region, function name and URL (2.6, 2.8)</td><td><span class="chip done">on main, applied</span></td></tr>
       <tr><td><code>terraform/site/main.tf</code></td><td>ECR push rights (2.6, applied); <code>/api/*</code> origin and behavior (2.9, applied); deploy role may update the function and upload <code>app.js</code>, CSP allows own script and API (2.10, 2.11)</td><td><span class="chip done">on main</span> <span class="chip todo">2.10/2.11 part: your apply</span></td></tr>
       <tr><td><code>.github/workflows/deploy.yml</code></td><td>Job <code>api</code>: production gate, build, push (no provenance), switch the function to the image digest, verify the live API; job <code>deploy</code>: <code>app.js</code> then <code>index.html</code>, both verified (2.7, 2.10, 2.12)</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>web/index.html</code>, <code>web/app.js</code></td><td>The button that calls <code>/api/hello</code> (2.12)</td><td><span class="chip done">on main</span> <span class="chip todo">live after your Deploy run</span></td></tr>
       <tr><td><code>README.md</code>, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code>, <code>docs/coding-agent-prompt.md</code></td><td>Version 2 documentation (2.13, 2.14)</td><td><span class="chip done">on main</span></td></tr>
-      <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on main</span> (updated for 2.5 and 2.6)</td></tr>
+      <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on main</span> (covers 2.0 to 2.15)</td></tr>
       <tr><td><code>TODO.md</code></td><td>The step 2 plan, piece by piece</td><td><span class="chip done">on main</span></td></tr>
     </table></div>
   </div>
@@ -1308,9 +1394,29 @@ curl.exe -sS -I "https://d****.cloudfront.net/" | Select-String content-security
 <section class="sec" id="cleanup">
   <div class="sketch alt" style="--c: var(--ink)">
     <h2>Clean up <span class="chip todo">planned</span></h2>
-    <p>Same steps as the version 1 guide's teardown (pause deploys, <code>terraform plan -destroy</code>, review, apply), with one extra point:</p>
-    <div class="note"><b>ECR is handled:</b> AWS will not delete a repository that still holds images, so the repository is marked <code>force_delete = true</code> (decided in 2.6). <code>terraform destroy</code> removes it with all its images, like the website bucket. The repository policy Lambda added by itself goes with it. Expect <i>25 destroyed</i>, and <code>terraform state list</code> empty afterwards.</div>
+    <p>Same steps as the version 1 guide's teardown, now with <b>25</b> resources:</p>
+    <div class="warn"><b>Cannot be undone.</b> It deletes every version of the page, every API image and the API's logs. A later rebuild gets a new CloudFront address.</div>
+    <ol class="steps" style="--c: var(--ink)">
+      <li><b>Pause deploys:</b> <span class="path">Actions &rsaquo; Deploy website &rsaquo; ... &rsaquo; Disable workflow</span>, so no run uploads to a bucket or repository that is being deleted.</li>
+      <li>Check the account, point Terraform at the <b>staging</b> state; <code>terraform state list</code> must show <b>25</b> lines. Nothing listed: wrong backend or already gone, stop.</li>
+      <li><b>Plan</b> the destroy and read it: <i>Plan: 0 to add, 0 to change, 25 to destroy.</i>, every name a staging one.</li>
+      <li><b>Apply</b> that plan. It ends with <i>25 destroyed</i>, and <code>terraform state list</code> then prints nothing.</li>
+    </ol>
+<pre><code>aws sts get-caller-identity
+Set-Location .\terraform\site
+terraform init -reconfigure "-backend-config=..\environments\staging\backend.hcl"
+terraform state list                <span class="c"># 25 lines</span>
+terraform plan -destroy "-var-file=..\environments\staging\site.tfvars" "-out=staging-destroy.tfplan"
+<span class="g"># Plan: 0 to add, 0 to change, 25 to destroy.</span>
+terraform apply staging-destroy.tfplan
+terraform state list                <span class="c"># nothing</span>
+Set-Location ..\..
+<span class="c"># Nothing left in us-east-2</span>
+aws ecr describe-repositories --region us-east-2 --query "repositories[].repositoryName"   <span class="g"># []</span>
+aws lambda list-functions --region us-east-2 --query "Functions[].FunctionName"            <span class="g"># []</span></code></pre>
+    <div class="note"><b>ECR is handled:</b> AWS will not delete a repository that still holds images, so the repository is marked <code>force_delete = true</code> (decided in 2.6). <code>terraform destroy</code> removes it with all its images, like the website bucket. The repository policy Lambda added by itself goes with it.</div>
     <h3>Rebuilding after a teardown: the order</h3>
+    <div class="warn"><b>Not yet run end to end.</b> The order follows from how the pieces depend on each other, but it has never been run as a whole. Watch the first real rebuild closely and correct this list if a step differs.</div>
     <p>A plain <code>terraform apply</code> into an empty account <b>fails</b>: the Lambda function starts from "the newest image in ECR", and a brand-new repository has none. The deploy role does not depend on the function (its policy builds the function's ARN from the name), so it can come first and let GitHub push the first image. Build it in this order:</p>
     <ol class="steps" style="--c: var(--ink)">
       <li><b>ECR and the deploy role only:</b> <code>terraform plan "-var-file=..\environments\staging\site.tfvars" "-target=aws_ecr_lifecycle_policy.api" "-target=aws_iam_role_policy.deploy" "-out=staging.tfplan"</code>, then <code>terraform apply staging.tfplan</code>. <b>5 to add</b>: the website bucket, the repository, its lifecycle rule, the deploy role and its policy. Terraform warns that <code>-target</code> is for exceptional cases; this is one.</li>
