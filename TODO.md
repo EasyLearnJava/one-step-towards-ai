@@ -150,7 +150,9 @@ GitHub in 2.5), and if run locally with
       (setup-python v7.1.0). It also starts the image and checks
       `/api/health` reports the commit SHA and `/api/hello` the welcome.
 - [x] `scripts/check-repo.sh` still passes on the new files.
-- [ ] Open a pull request from `step-2` (Checks runs on pull requests and on
+- [x] Checks green. (Since 2026-11-26 all work goes straight to `main`; the
+      `step-2` branch was merged and removed. Was: open a pull request from
+      `step-2`; Checks runs on pull requests and on
       pushes to `main` only) and see every job green.
 
 **Done when:** after you push, every Checks job is green.
@@ -163,7 +165,9 @@ GitHub in 2.5), and if run locally with
       and region. New file `terraform/site/api.tf`; 17 resources in total.
 - [x] Deploy role: may push images to this repository only (plus
       `ecr:GetAuthorizationToken`, which AWS does not allow to be scoped).
-- [ ] You: plan and apply (17 to add).
+- [x] You: plan and apply (17 to add). Checked: repository
+      `one-step-staging-api` in us-east-2, scan on push, keep-5 rule, deploy
+      role has the ECR push actions.
 - [ ] GitHub variable `API_ECR_REPOSITORY` on `staging`.
 - [ ] The staging stack was destroyed, so this apply also rebuilds the
       existing 15 resources: update `SITE_BUCKET` and `WEBSITE_URL`, confirm
@@ -174,9 +178,11 @@ GitHub in 2.5), and if run locally with
 
 ### 2.7 First image in ECR
 
-- [ ] Deploy workflow: new job that builds the image on Linux, tags it with
-      the commit SHA and pushes it to ECR. A run option ("image only") stops
-      after the push, because the function does not exist yet.
+- [x] Deploy workflow: new `image` job that builds the image on Linux, tags
+      it with the commit SHA and pushes it to ECR, then checks the tag is in
+      ECR. A run option ("image only") stops after the push, because the
+      function does not exist yet. The page job now runs after it.
+- [ ] You: run Deploy website on `main`, `staging`, image only ticked.
 
 **Done when:** ECR lists an image tagged with the commit SHA.
 
@@ -258,7 +264,7 @@ stays OK.
 
 ### 2.15 Release
 
-- [ ] Commit, push, wait for Checks, tag `v2.0.0`.
+- [ ] Wait for Checks on `main`, tag `v2.0.0`.
 - [ ] Production is not built yet; promoting to production stays in step 6.
 
 **Done when:** Checks is green on the tagged commit and `v2.0.0` is on

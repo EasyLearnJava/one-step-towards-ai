@@ -203,15 +203,15 @@
       <tr><td><a href="#s23">2.3</a></td><td>Personal welcome with <code>?name=</code></td><td>&nbsp;</td><td><span class="chip dropped">dropped</span></td></tr>
       <tr><td><a href="#s24">2.4</a></td><td>Docker image with the Lambda Web Adapter</td><td><span class="chip pc">Your PC</span><span class="chip dk">Docker</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s25">2.5</a></td><td>GitHub runs the tests and builds the image</td><td><span class="chip gh">GitHub</span></td><td><span class="chip done">done</span></td></tr>
-      <tr><td><a href="#s26">2.6</a></td><td>ECR repository in us-east-2; staging rebuilt</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip todo">code ready: your turn to apply</span></td></tr>
-      <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s26">2.6</a></td><td>ECR repository in us-east-2; staging rebuilt</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">code ready: your turn to run</span></td></tr>
       <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s29">2.9</a></td><td>CloudFront route <code>/api/*</code> to Lambda</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s210">2.10</a></td><td>Deploy workflow updates the function</td><td><span class="chip gh">GitHub</span><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
     </table></div>
-    <div class="note"><b>Today the API runs only on your PC</b> (dev server on port 8000, Docker container on port 8001). Calling <code>/api/hello</code> on the real website would return <b>403 AccessDenied</b> from S3, because AWS has no place to run Python until pieces 2.6 to 2.9 exist. The code is on the GitHub branch <code>step-2</code>, with a pull request open and Checks green; <code>main</code> still holds version 1 until 2.15.</div>
+    <div class="note"><b>Today the API runs only on your PC</b> (dev server on port 8000, Docker container on port 8001). Calling <code>/api/hello</code> on the real website would return <b>403 AccessDenied</b> from S3, because AWS has no place to run Python until pieces 2.6 to 2.9 exist. All work goes straight onto <code>main</code> (no feature branches). Deploy is a manual click, so pushing to <code>main</code> never puts anything live by itself.</div>
   </div>
 </section>
 
@@ -386,7 +386,7 @@
       <div class="sketch st" style="--c: var(--teal)"><span class="n">1</span><b>Local API</b>2.0 to 2.3<br><span class="chip done">done</span></div>
       <div class="sketch alt st" style="--c: var(--docker)"><span class="n">2</span><b>Docker image</b>2.4<br><span class="chip done">done</span></div>
       <div class="sketch st" style="--c: var(--gh)"><span class="n">3</span><b>GitHub checks</b>2.5<br><span class="chip done">done</span></div>
-      <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip todo">2.6: your turn</span></div>
+      <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip todo">2.6 done, 2.8 next</span></div>
       <div class="sketch st" style="--c: var(--orange)"><span class="n">5</span><b>Auto deploy</b>2.10<br><span class="chip todo">planned</span></div>
       <div class="sketch alt st" style="--c: var(--purple)"><span class="n">6</span><b>Page + release</b>2.11 to 2.15<br><span class="chip todo">planned</span></div>
     </div>
@@ -635,8 +635,8 @@ python        <span class="g">Python 3.13.18</span></code></pre>
     <h2><span class="num" style="--c: var(--gh)">2.5</span>Checks on GitHub <span class="chip done">done</span><span class="chip every">EVERY PUSH</span><span class="chip gh">GitHub</span></h2>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>A new <code>api</code> job in <code>.github/workflows/checks.yml</code>: Python 3.13, install, <code>python -m pytest</code>, <code>docker build</code> with the commit SHA (no push), then start the image and call it.</div>
-      <div class="w-why"><b class="l">WHY</b>Every pull request proves the code and the image still work on a clean Linux machine, with no Docker on your PC, before anything is deployed.</div>
-      <div class="w-see"><b class="l">YOU'LL SEE</b>Three green jobs in the <b>Checks</b> run of the pull request: <code>validate</code>, <code>api</code>, <code>scripts</code>.</div>
+      <div class="w-why"><b class="l">WHY</b>Every push proves the code and the image still work on a clean Linux machine, with no Docker on your PC, before anything is deployed.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>Three green jobs in the <b>Checks</b> run under <span class="path">Actions</span>: <code>validate</code>, <code>api</code>, <code>scripts</code>.</div>
     </div>
     <h3>The api job, step by step</h3>
     <ol class="steps" style="--c: var(--gh)">
@@ -646,8 +646,8 @@ python        <span class="g">Python 3.13.18</span></code></pre>
       <li>Start the image, wait for it, then check two things: <code>/api/health</code> reports <b>this commit's SHA</b>, and <code>/api/hello</code> returns the welcome.</li>
       <li>Always print the container's log, so a failure shows why.</li>
     </ol>
-    <div class="note"><b>When it runs:</b> on every <b>pull request</b> and every push to <b>main</b>. A push to <code>step-2</code> alone does not start it, so step 2 has an open pull request from <code>step-2</code> into <code>main</code>. Do not merge it until 2.15.</div>
-    <div class="ok"><b>Checked:</b> the same script was first run on the PC against an image built with a fake SHA (passed, and correctly failed when given a different SHA); then the pull request's Checks run was green. Free: the repository is public, and GitHub Actions minutes are free for public repositories.</div>
+    <div class="note"><b>When it runs:</b> on every push to <b>main</b> (and on pull requests, if any are opened). All step 2 work is pushed straight to <code>main</code>; wait for Checks to turn green before running Deploy.</div>
+    <div class="ok"><b>Checked:</b> the same script was first run on the PC against an image built with a fake SHA (passed, and correctly failed when given a different SHA); then the Checks run on GitHub was green. Free: the repository is public, and GitHub Actions minutes are free for public repositories.</div>
     <h3>Validate on your PC before pushing</h3>
     <p>GitHub repeats these checks, but running them first finds problems in seconds. Steps 2 and 3 are only needed when <code>app/</code>, the <code>Dockerfile</code> or the requirements change.</p>
 <pre><code><span class="c"># 1. Tests (venv active)</span>
@@ -666,12 +666,37 @@ git push</code></pre>
 
 <section class="sec" id="s27">
   <div class="sketch alt" style="--c: var(--gh)">
-    <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip todo">planned</span><span class="chip gh">GitHub</span></h2>
+    <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip todo">code ready: your turn to run</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
     <div class="wwy">
-      <div class="w-what"><b class="l">WHAT</b>A Deploy job that builds the image on Linux, tags it with the commit SHA and pushes it to ECR. A run option, "image only", stops after the push.</div>
-      <div class="w-why"><b class="l">WHY</b>The Lambda function (2.8) can only be created from an image that already exists in ECR.</div>
-      <div class="w-see"><b class="l">YOU'LL SEE</b>ECR lists an image tagged with the commit SHA.</div>
+      <div class="w-what"><b class="l">WHAT</b>A new <code>image</code> job in the <b>Deploy website</b> workflow: builds the image on Linux, tags it with the commit SHA, pushes it to ECR, and checks it arrived. A new run option, <b>image only</b>, stops after the push.</div>
+      <div class="w-why"><b class="l">WHY</b>The Lambda function (2.8) can only be created from an image that already exists in ECR. "Image only" is needed because the function does not exist yet.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>A green run, and an image in ECR whose tag is the commit SHA.</div>
     </div>
+    <h3>What the workflow does now</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Job</th><th>Steps</th><th>Runs when</th></tr>
+      <tr><td><code>image</code> (new)</td><td>Read the registry and region from <code>API_ECR_REPOSITORY</code> &rsaquo; sign in to AWS with OIDC (no keys) &rsaquo; <code>docker login</code> to ECR &rsaquo; <code>docker build</code> with <code>APP_VERSION</code> = commit SHA &rsaquo; <code>docker push</code> as <code>:&lt;commit SHA&gt;</code> &rsaquo; ask ECR for that tag; fail if it is missing</td><td>Every run</td></tr>
+      <tr><td><code>deploy</code></td><td>Upload <code>index.html</code> and check the live page (unchanged from version 1)</td><td>After <code>image</code> succeeds, unless <b>image only</b> is ticked</td></tr>
+    </table></div>
+    <div class="note">The image is always built from the commit being deployed, on GitHub's Linux machine; no Zscaler secret is needed there. Like the page, it runs only from <code>main</code>.</div>
+    <h3>Run it <span class="chip gh">GitHub</span><span class="chip manual">MANUAL</span></h3>
+    <div class="check"><b class="hd">Check first:</b> the <b>Checks</b> run for the latest commit on <code>main</code> is green, and the <code>staging</code> environment has the variable <code>API_ECR_REPOSITORY</code> (2.6, step B).</div>
+    <ol class="steps" style="--c: var(--gh)">
+      <li>GitHub &rsaquo; <span class="path">Actions &rsaquo; Deploy website &rsaquo; Run workflow</span>.</li>
+      <li>Branch <code>main</code>, environment <code>staging</code>, tick <b>Only build and push the API image to ECR (skip the page)</b>.</li>
+      <li><b>Run workflow</b>. The <code>image</code> job takes about 1 to 3 minutes; <code>deploy</code> shows as skipped.</li>
+    </ol>
+    <h3>Check it worked</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Check</th><th>Where</th><th>Expected</th></tr>
+      <tr><td>Run is green</td><td><span class="path">Actions &rsaquo; the run</span></td><td><code>image</code> green, last line <i>Image &lt;SHA&gt; is in ECR.</i>; <code>deploy</code> skipped</td></tr>
+      <tr><td>Image in ECR</td><td>Console, region <b>us-east-2</b>: <span class="path">ECR &rsaquo; one-step-staging-api &rsaquo; Images</span></td><td>One image; its tag is the full commit SHA</td></tr>
+      <tr><td>Scan result</td><td>The image &rsaquo; <span class="path">Vulnerabilities</span></td><td>A scan report (findings in the Debian base image are normal; nothing to act on yet)</td></tr>
+    </table></div>
+<pre><code><span class="c"># Same check from PowerShell</span>
+aws ecr describe-images --region us-east-2 --repository-name one-step-staging-api `
+  --query "imageDetails[].{tag:imageTags[0],pushed:imagePushedAt,sizeMB:imageSizeInBytes}"</code></pre>
+    <div class="warn"><b>If the run fails</b> at <i>Configure AWS credentials</i>: <code>AWS_ROLE_ARN</code> on <code>staging</code> does not match the <code>deploy_role_arn</code> output. At <i>Log in to ECR</i> or <i>push</i> with <code>AccessDenied</code>: <code>API_ECR_REPOSITORY</code> does not match <code>api_ecr_repository_url</code> exactly.</div>
   </div>
 </section>
 
@@ -691,7 +716,7 @@ git push</code></pre>
 
 <section class="sec" id="s26">
   <div class="sketch alt" style="--c: var(--blue)">
-    <h2><span class="num" style="--c: var(--blue)">2.6</span>Region and image registry <span class="chip todo">code ready: your turn</span><span class="chip once">ONE TIME</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
+    <h2><span class="num" style="--c: var(--blue)">2.6</span>Region and image registry <span class="chip done">done</span><span class="chip once">ONE TIME</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>A private ECR repository, <code>one-step-staging-api</code>, in us-east-2, and permission for the GitHub deploy role to push images to it. The same apply rebuilds version 1's staging site.</div>
       <div class="w-why"><b class="l">WHY</b>Lambda must be in us-east-2 (the region rule blocks it in us-east-1), and Lambda can only run images stored in ECR in its own region.</div>
@@ -839,7 +864,7 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
     <ol class="steps" style="--c: var(--gold)">
       <li><b>2.13:</b> README, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code> and this guide get the real commands and screenshots for 2.5 to 2.12; resource counts updated everywhere.</li>
       <li><b>2.14:</b> <code>docs/coding-agent-prompt.md</code> rebuilds this version (version 1's prompt stays in tag <code>v1.0.0</code>).</li>
-      <li><b>2.15:</b> merge <code>step-2</code> into <code>main</code>, wait for Checks, tag <code>v2.0.0</code>. Production stays for step 6.</li>
+      <li><b>2.15:</b> wait for Checks on <code>main</code>, then tag <code>v2.0.0</code>. Production stays for step 6.</li>
     </ol>
   </div>
 </section>
@@ -852,17 +877,18 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
     <h2>Files in the repository</h2>
     <div class="tablewrap"><table>
       <tr><th>File</th><th>What it is</th><th>Status</th></tr>
-      <tr><td><code>app/main.py</code></td><td>The whole API: two routes and the LangChain template</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>app/requirements.txt</code></td><td>Run-time packages, pinned: fastapi 0.165.0, uvicorn 0.54.0, langchain-core 1.8.5</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>requirements-dev.txt</code></td><td>Adds pytest 9.2.0 and httpx2 2.16.2 (FastAPI's test client)</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>tests/test_main.py</code></td><td>Health, hello, and 404 for everything else</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>pyproject.toml</code></td><td>pytest settings only</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>.github/workflows/checks.yml</code></td><td>New <code>api</code> job: tests, image build, start-up check (2.5)</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and its lifecycle rule (2.6)</td><td><span class="chip done">on step-2</span> <span class="chip todo">not applied yet</span></td></tr>
-      <tr><td><code>terraform/site/versions.tf</code>, <code>main.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider, ECR push rights for the deploy role, new outputs (2.6)</td><td><span class="chip done">on step-2</span> <span class="chip todo">not applied yet</span></td></tr>
-      <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on step-2</span> (updated for 2.5 and 2.6)</td></tr>
-      <tr><td><code>TODO.md</code></td><td>The step 2 plan, piece by piece</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>app/main.py</code></td><td>The whole API: two routes and the LangChain template</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>app/requirements.txt</code></td><td>Run-time packages, pinned: fastapi 0.165.0, uvicorn 0.54.0, langchain-core 1.8.5</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>requirements-dev.txt</code></td><td>Adds pytest 9.2.0 and httpx2 2.16.2 (FastAPI's test client)</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>tests/test_main.py</code></td><td>Health, hello, and 404 for everything else</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>pyproject.toml</code></td><td>pytest settings only</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>.github/workflows/checks.yml</code></td><td>New <code>api</code> job: tests, image build, start-up check (2.5)</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and its lifecycle rule (2.6)</td><td><span class="chip done">on main, applied</span></td></tr>
+      <tr><td><code>terraform/site/versions.tf</code>, <code>main.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider, ECR push rights for the deploy role, new outputs (2.6)</td><td><span class="chip done">on main, applied</span></td></tr>
+      <tr><td><code>.github/workflows/deploy.yml</code></td><td>New <code>image</code> job and the "image only" option (2.7)</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on main</span> (updated for 2.5 and 2.6)</td></tr>
+      <tr><td><code>TODO.md</code></td><td>The step 2 plan, piece by piece</td><td><span class="chip done">on main</span></td></tr>
     </table></div>
   </div>
 </section>

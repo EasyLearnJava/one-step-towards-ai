@@ -10,6 +10,11 @@ on:
         options:
           - staging
           - production
+      image_only:
+        description: "Only build and push the API image to ECR (skip the page)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,8 +26,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  # Builds the API image on Linux, tags it with the commit SHA and pushes it to
+  # the environment's ECR repository (API_ECR_REPOSITORY, from Terraform).
+  image:
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      API_ECR_REPOSITORY: ${{ vars.API_ECR_REPOSITORY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Read registry and region from the repository URL
+        run: |
+          set -euo pipefail
+          # <account>.dkr.ecr.<region>.amazonaws.com/<name>
+          registry="${API_ECR_REPOSITORY%%/*}"
+          echo "API_REGISTRY=${registry}" >> "$GITHUB_ENV"
+          echo "API_REGION=$(echo "$registry" | cut -d. -f4)" >> "$GITHUB_ENV"
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.API_REGION }}
+      - name: Log in to ECR
+        run: aws ecr get-login-password --region "$API_REGION" | docker login --username AWS --password-stdin "$API_REGISTRY"
+      - name: Build and push the image
+        run: |
+          set -euo pipefail
+          docker build --build-arg "APP_VERSION=${GITHUB_SHA}" -t "${API_ECR_REPOSITORY}:${GITHUB_SHA}" .
+          docker push "${API_ECR_REPOSITORY}:${GITHUB_SHA}"
+      - name: Verify the image is in ECR
+        run: |
+          set -euo pipefail
+          found="$(aws ecr batch-get-image --region "$API_REGION" \
+            --repository-name "${API_ECR_REPOSITORY#*/}" \
+            --image-ids "imageTag=${GITHUB_SHA}" \
+            --query 'length(images)' --output text)"
+          if [ "$found" != "1" ]; then
+            echo "Image ${GITHUB_SHA} not found in ECR." >&2
+            exit 1
+          fi
+          echo "Image ${GITHUB_SHA} is in ECR."
+
+  deploy:
+    needs: image
+    if: github.ref == 'refs/heads/main' && !inputs.image_only
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     env:
