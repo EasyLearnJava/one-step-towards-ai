@@ -4,7 +4,8 @@ These are setup instructions, not a record that the resources already exist. Rev
 
 ## 1. Prerequisites
 
-- Review the [illustrated deployment guide](staging-deployment-guide.html); its stage 1 covers the AWS CLI, Terraform and your AWS user.
+- Review the [illustrated deployment guide](staging-deployment-guide.html); its stage 1 covers the AWS CLI, Terraform and your AWS user. The [version 2 guide](staging-deployment-guide-v2.html) covers the API.
+- For the API: Python 3.13 for local tests (see the [README](../README.md#run-the-api-on-your-pc)). Docker Desktop is optional: GitHub builds every image, including the first one when you [rebuild an environment](staging-deployment.md#rebuild-procedure-first-apply-in-a-new-environment).
 - Have access to an AWS account, an approved infrastructure role, a GitHub repository, and GitHub environments.
 - Configure AWS Budgets and alert recipients. Budgets alert on spending; they do not stop it.
 - Prepare an AWS identity authorized to create and verify a state bucket. The bootstrap below creates a separate private, encrypted, versioned S3 bucket for each environment. Restrict access with IAM or organization policies and authorize the infrastructure role for the bucket, state and `.tflock` objects. Public-access blocking does not prevent access granted to other principals by IAM. For different accounts, provision a backend accessible to each account.
@@ -14,7 +15,17 @@ These are setup instructions, not a record that the resources already exist. Rev
 
 The examples use `us-east-1` (N. Virginia) for the state and website buckets. If using an existing state bucket, set the backend region to that bucket's actual region. Monitoring also uses `us-east-1` because Route 53 health check metrics are published there. Changing a backend configuration does not move an existing state bucket or its state.
 
+The API (ECR repository, Lambda function and its log group) uses `us-east-2` (Ohio), fixed in `versions.tf`. The organization's region policy blocks Lambda in `us-east-1`, and Lambda can pull images only from ECR in its own region. CloudFront is global and sends `/api/*` to the function, so the site keeps one address.
+
 The site Terraform creates the GitHub deployment role; the infrastructure operator needs the separate permissions required to create and manage all configured resources. No AWS credentials belong in this repository.
+
+The deployment role may only:
+
+- upload `index.html` and `app.js` to the website bucket (`s3:PutObject`);
+- push images to this environment's ECR repository, plus `ecr:GetAuthorizationToken`, which AWS does not allow to be limited to one repository;
+- update this environment's Lambda function (`lambda:UpdateFunctionCode` and `lambda:GetFunctionConfiguration`).
+
+The Lambda function's execution role may only write its own logs. The page's Content Security Policy allows scripts and requests only from the site itself (`script-src 'self'; connect-src 'self'`).
 
 References: [S3 Terraform backend](https://developer.hashicorp.com/terraform/language/backend/s3), [GitHub OIDC in AWS](https://docs.github.com/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws), and [CloudFront OAC](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html).
 
@@ -79,13 +90,15 @@ terraform apply staging.tfplan
 terraform output
 ```
 
+The configuration has 25 resources: 15 for the website and 10 for the API. In a new or rebuilt environment, a plain first plan and apply fails: the Lambda function starts from the newest image in ECR, and a new repository is empty. Follow the [rebuild procedure](staging-deployment.md#rebuild-procedure-first-apply-in-a-new-environment): ECR and the deploy role only, a first image pushed by the Deploy workflow with **image only**, then everything else.
+
 The saved plan can contain sensitive information; do not share or commit it. The site health alarm may report a failure until `index.html` is published. Confirm the SNS subscription email; no email alerts will arrive until confirmation.
 
-Save these Terraform outputs for configuring the **staging** GitHub environment: `website_url`, `site_bucket_name`, and `deploy_role_arn`. Verify that `aws_account_id` is the intended account.
+Save these Terraform outputs for configuring the **staging** GitHub environment: `website_url`, `site_bucket_name`, `deploy_role_arn`, `api_ecr_repository_url` and `api_function_name`. Verify that `aws_account_id` is the intended account. The other outputs are `api_region` and `api_function_url`; the function URL is for checks only, because only CloudFront may call it.
 
 ## 4. Configure GitHub and deploy staging
 
-Create GitHub environments named exactly `staging` and `production`. Restrict both to the `main` branch; protect production with required reviewers where your GitHub plan supports it. Protect `main` with pull request review and required checks. The [staging guide](staging-deployment.md#4-publish-using-github-actions) gives the click path.
+Create GitHub environments named exactly `staging` and `production`. Restrict both to the `main` branch; protect production with required reviewers where your GitHub plan supports it. In this project all work goes directly on `main`, with no feature branches, so `Checks` runs on each push to `main`; wait for it to be green before deploying. The [staging guide](staging-deployment.md#4-publish-using-github-actions) gives the click path.
 
 Set these GitHub **environment variables** for staging (not repository-wide values):
 
@@ -95,10 +108,17 @@ Set these GitHub **environment variables** for staging (not repository-wide valu
 | `SITE_BUCKET` | Terraform output `site_bucket_name` |
 | `WEBSITE_URL` | Terraform output `website_url`, without a trailing slash |
 | `AWS_ROLE_ARN` | Terraform output `deploy_role_arn` |
+| `API_ECR_REPOSITORY` | Terraform output `api_ecr_repository_url` |
+| `API_FUNCTION_NAME` | Terraform output `api_function_name`, for example `one-step-staging-api` |
+| `API_REGION` | Optional, for reference: `us-east-2` (Terraform output `api_region`). The Deploy workflow reads the region from `API_ECR_REPOSITORY`. |
 
-Push the project to the intended GitHub repository. The `Checks` workflow runs repository rules (`scripts/check-repo.sh`), Terraform formatting and validation, and a Windows PowerShell 5.1 parse of the scripts; it never touches AWS. From **Actions > Deploy website**, select `main` and `staging`, then run the workflow. Deployment is manual; a push does not publish automatically.
+`API_ECR_REPOSITORY` contains the AWS account ID (`<account-id>.dkr.ecr.us-east-2.amazonaws.com/one-step-staging-api`); keep it in GitHub and never commit it.
 
-The workflow publishes only `web/index.html` and checks the public response byte-for-byte. Inspect the CloudFront URL in a browser, check that direct anonymous S3 access is denied, and verify that the health check and confirmed alert subscription work. An initially failing health check should recover after the first successful upload.
+Push the project to the intended GitHub repository. The `Checks` workflow runs repository rules (`scripts/check-repo.sh`), Terraform formatting and validation, a Windows PowerShell 5.1 parse of the scripts, and an `api` job: `python -m pytest`, a Docker build with the commit SHA (not pushed), and a run of the image that checks `/api/health` reports that SHA and `/api/hello` returns the welcome. It never touches AWS. From **Actions > Deploy website**, select `main` and `staging`, then run the workflow. Deployment is manual; a push does not publish automatically.
+
+The workflow has two jobs. The `api` job builds the image on Linux with `--provenance=false` (the default provenance attestation turns the push into an image index, which Lambda rejects), pushes it to ECR tagged with the commit SHA, reads its digest, and updates the Lambda function to `<repository>@<digest>`. It waits with `aws lambda wait function-updated`, then checks that `<WEBSITE_URL>/api/health` reports this commit and `/api/hello` returns the welcome. The `deploy` job then uploads `web/app.js` and `web/index.html`, in that order, and checks both public responses byte-for-byte. The **image only** option stops after the push; it is for an environment whose function does not exist yet.
+
+Inspect the CloudFront URL in a browser and select **Say hello to the API**. Check that direct anonymous S3 access is denied, that the function URL called directly returns 403, and that the health check and confirmed alert subscription work. An initially failing health check should recover after the first successful upload. The [staging guide](staging-deployment.md#test-the-api) lists the test commands and an [API troubleshooting table](staging-deployment.md#if-the-api-fails).
 
 ## 5. Set up production and promote
 
@@ -119,23 +139,59 @@ Alternatively configure an existing production backend manually using its exampl
 
 A separate, new production account may also need its own CloudFront account verification before apply; see the [staging guide](staging-deployment.md#1-prepare-aws). If the organization's region SCP is attached at the root, the `us-east-1` exemptions added for staging already cover production.
 
-Repeat the staging initialization, plan, and apply commands with `production` replacing `staging`, including `terraform init -reconfigure` before changing backends. In the plan, check that the deploy role's trust `sub` reads `repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:production`. Configure the four GitHub environment variables (`AWS_REGION`, `SITE_BUCKET`, `WEBSITE_URL`, `AWS_ROLE_ARN`) on the `production` environment from the production outputs.
+Repeat the staging initialization, plan, and apply commands with `production` replacing `staging`, including `terraform init -reconfigure` before changing backends. A new production environment needs the [rebuild procedure](staging-deployment.md#rebuild-procedure-first-apply-in-a-new-environment), with `production` in place of `staging` (repository `one-step-production-api`). In the plan, check that the deploy role's trust `sub` reads `repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:production`. Configure the GitHub environment variables (`AWS_REGION`, `SITE_BUCKET`, `WEBSITE_URL`, `AWS_ROLE_ARN`, `API_ECR_REPOSITORY`, `API_FUNCTION_NAME`, and optionally `API_REGION`) on the `production` environment from the production outputs.
 
-Before deploying, compare the commit in the successful staging run with the current `main` commit. If they differ, deploy and verify the current `main` commit in staging first. Start a new staging run for it; **Re-run jobs** reuses the earlier run's commit. Then run the deployment workflow for `production` and approve it through the protected GitHub environment. The workflow also checks the GitHub deployment API for a successful staging deployment of that exact commit; a missing, failed, or inactive deployment blocks production. Verify the production page and monitoring independently.
+Production has not been built for version 2 yet; promotion to production is planned for step 6.
+
+Before deploying, compare the commit in the successful staging run with the current `main` commit. If they differ, deploy and verify the current `main` commit in staging first. Start a new staging run for it; **Re-run jobs** reuses the earlier run's commit. Then run the deployment workflow for `production` and approve it through the protected GitHub environment. The workflow also checks the GitHub deployment API for a successful staging deployment of that exact commit; a missing, failed, or inactive deployment blocks production. This check runs at the start of the `api` job, before it signs in to AWS, so a blocked run pushes no image and changes nothing. Verify the production page, API and monitoring independently.
 
 ## 6. Operate and recover
 
-- **Rollback:** revert the change in Git, merge the revert to `main`, deploy and verify that commit in staging, then approve and deploy it to production. S3 versioning is an additional recovery mechanism; direct restoration needs separate authorized permissions.
-- **Alerts:** the Route 53 HTTPS health check searches the page for `One Step At A Time`. If the title changes, update the health-check string as part of the same release. The alarm monitors Route 53 health metrics in `us-east-1`.
-- **Caching:** CloudFront caching is disabled and the page has `Cache-Control: no-cache`. When adding versioned assets, design and test a separate caching strategy before changing this behavior.
-- **Logs:** website access logging is not enabled by this configuration. Decide on privacy, retention, access, and cost before enabling it.
-- **Destruction:** the website bucket has `force_destroy = true` for a disposable deployment. Destroying it permanently deletes its objects, all versions, and delete markers. Follow the checklist below; do not delete remote state before verification.
-- **Costs:** S3 requests/storage, CloudFront, Route 53 health checks, SNS, and CloudWatch may incur charges. Review usage and alerts regularly.
-- **Future login:** the website is public. OAC protects the bucket origin, not user data. Login, private data, and APIs require separate authentication and authorization.
+- **Rollback:** revert the change in Git, push the revert to `main`, deploy and verify that commit in staging, then approve and deploy it to production. S3 versioning is an additional recovery mechanism; direct restoration needs separate authorized permissions. For a quick API-only rollback, see below.
+- **Alerts:** the Route 53 HTTPS health check searches the page for `One Step At A Time`. If the title changes, update the health-check string as part of the same release. The alarm monitors Route 53 health metrics in `us-east-1`. It checks the page only, not the API; the Deploy workflow checks the API on each release.
+- **Caching:** CloudFront caching is disabled and the page has `Cache-Control: no-cache`. The `/api/*` route also uses `Managed-CachingDisabled`, and `/api/hello` sends `Cache-Control: no-store`. When adding versioned assets, design and test a separate caching strategy before changing this behavior.
+- **Logs:** website access logging is not enabled by this configuration. Decide on privacy, retention, access, and cost before enabling it. The API writes its logs to CloudWatch Logs in `us-east-2`, kept 14 days (see below).
+- **Destruction:** the website bucket has `force_destroy = true` and the ECR repository has `force_delete = true` for a disposable deployment. Destroying them permanently deletes the bucket's objects, all versions and delete markers, and every API image. Follow the checklist below; do not delete remote state before verification.
+- **Costs:** S3 requests/storage, CloudFront, Route 53 health checks, SNS, CloudWatch, Lambda, ECR storage and CloudWatch Logs may incur charges. The API is expected to add well under $1 a month until AI calls arrive; check the [cost estimate](staging-deployment.md#5-check-costs-and-credits). Review usage and alerts regularly.
+- **Future login:** the website and the API are public through CloudFront, with no login. OAC protects the bucket and function URL origins, not user data. The function's reserved concurrency of 5 caps cost and abuse. Before any AI call (step 3), add login or a rate limit and a budget alarm. Private data requires separate authentication and authorization.
+
+### API: live version, logs and rollback
+
+**Which commit is live.** `/api/health` reports the commit SHA of the running image:
+
+```powershell
+curl.exe -sS "https://d****.cloudfront.net/api/health"
+```
+
+Use your `website_url` in place of the example address. Compare the `version` with `git log --oneline -5`.
+
+**Logs.** The log group is `/aws/lambda/one-step-<environment>-api` in `us-east-2`, kept 14 days. In the console, open **CloudWatch > Log groups** with the region set to `us-east-2`. From the command line, with the infrastructure credentials:
+
+```powershell
+aws logs tail /aws/lambda/one-step-staging-api --region us-east-2 --since 1h
+```
+
+Each request ends with a `REPORT` line: duration, billed duration, memory size and memory used. A cold start adds `Init Duration`, the time to start the image and the app.
+
+**Rollback the API.** Two ways:
+
+1. Through GitHub, preferred: open an earlier successful **Deploy website** run (from version 2 on) and select **Re-run all jobs**. A re-run uses that run's commit, so it rebuilds and ships the older image and page, and checks them.
+2. Directly, with the infrastructure credentials: point the function at an older image still in ECR. The lifecycle rule keeps only the newest 5 images.
+
+   ```powershell
+   # List images, newest last, with their commit tags and digests.
+   aws ecr describe-images --repository-name one-step-staging-api --region us-east-2 --query "sort_by(imageDetails,&imagePushedAt)[].[imageTags[0],imageDigest,imagePushedAt]" --output table
+
+   # Switch the function to the chosen image and wait for the update.
+   aws lambda update-function-code --function-name one-step-staging-api --region us-east-2 --image-uri "<account-id>.dkr.ecr.us-east-2.amazonaws.com/one-step-staging-api@sha256:<older-digest>"
+   aws lambda wait function-updated --function-name one-step-staging-api --region us-east-2
+   ```
+
+   Then check `/api/health` shows the older commit. This changes the API only, not the page. Terraform ignores image changes, so it reports no drift. The next Deploy run replaces it again.
 
 ## 7. Teardown and verify one environment
 
-**Destructive operation:** This permanently deletes the selected environment's website and all object versions. Back up anything needed and stop if the account, environment, state, or plan is unexpected. Never destroy a shared state bucket or shared OIDC provider without checking every dependent project and environment.
+**Destructive operation:** This permanently deletes the selected environment's website and all object versions, the API function, and every image in its ECR repository. Back up anything needed and stop if the account, environment, state, or plan is unexpected. Never destroy a shared state bucket or shared OIDC provider without checking every dependent project and environment.
 
 Use the approved infrastructure role, not the restricted GitHub deployment role. It needs permissions to remove the resources, including listing and deleting S3 object versions. A permission error is **not** proof that a resource is gone.
 
@@ -170,19 +226,23 @@ Repeat these steps separately for each deployed environment. The example uses **
 
    CloudFront deletion can take time. If Terraform reports an error, resolve it and re-plan; do not assume teardown finished.
 
+   The ECR repository has `force_delete = true`, so it is deleted with its images; nothing needs deleting first. Lambda added its own repository policy, `LambdaECRImageRetrievalPolicy`, when the function was created. Terraform does not manage it, and it disappears with the repository.
+
 ### Checklist: verify after destroy
 
-1. [ ] Confirm the apply ended with `Apply complete! Resources: 0 added, 0 changed, 15 destroyed.`, then check Terraform's record:
+1. [ ] Confirm the apply ended with `Apply complete! Resources: 0 added, 0 changed, 25 destroyed.`, then check Terraform's record:
 
    ```powershell
    terraform state list
    ```
 
    Terraform deletes each resource and waits for AWS to confirm; if a deletion fails, the apply stops with an error and that resource stays in the state. `terraform state list` should show no managed site resources. Data sources may remain; review unexpected entries rather than deleting state.
-2. [ ] Independently review CloudFront, S3, Route 53 health checks, CloudWatch and SNS in AWS (the monitoring region is `us-east-1`), including resources created manually or by a failed apply, which the Terraform state does not record.
+2. [ ] Independently review CloudFront, S3, Route 53 health checks, CloudWatch and SNS in AWS (the monitoring region is `us-east-1`), and ECR, Lambda and the `/aws/lambda/one-step-<environment>-api` log group in `us-east-2`. Include resources created manually or by a failed apply, which the Terraform state does not record.
 3. [ ] Repeat for **production**, if deployed, using its own profile, `backend.hcl`, `site.tfvars` and plan. Do not remove the backend while any environment still uses it.
 4. [ ] Review the separate state bucket, including state and lock-file **versions**, delete markers, and incomplete multipart uploads. If it is exclusively owned by this project and all environments are finished, use an approved, reviewed S3 cleanup procedure to delete its contents and then the bucket. This is outside the site Terraform state. If shared, retain it and remove only explicitly approved project-owned state objects and versions.
 5. [ ] Review the existing GitHub OIDC provider, AWS Budgets, alerts, and any manually created resources. Remove only those exclusively owned by this project and no longer needed; never delete a shared provider or budget blindly.
 6. [ ] Review AWS Billing/Cost Explorer over the following days for all relevant accounts and regions. AWS may report delayed charges or already-incurred usage. An empty Terraform state does **not** guarantee a zero bill or reveal resources Terraform never managed.
 
 If an apply failed partway, inspect the Terraform state and AWS consoles before attempting cleanup.
+
+To build the environment again later, follow the [rebuild procedure](staging-deployment.md#rebuild-procedure-first-apply-in-a-new-environment); a plain first apply fails while the ECR repository is empty.

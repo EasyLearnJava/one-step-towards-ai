@@ -186,7 +186,11 @@ GitHub in 2.5), and if run locally with
       Pushed `fb5a197`, but as an image index plus an attestation (3 ECR
       entries): GitHub's builder adds provenance by default, and Lambda
       rejects image indexes. Fixed with `docker build --provenance=false`.
-- [ ] You: run image only once more, so ECR gets one plain image.
+- [x] You: run image only once more, so ECR gets one plain image. Done for
+      `9d044a6`: one Docker v2 image, about 65 MB. Scan: 9 HIGH, 5 MEDIUM
+      (base image packages; review before step 3). Checks for this commit
+      first hit a 429 from public.ecr.aws (see the guide's open issues);
+      the re-run was green.
 
 **Done when:** ECR lists an image tagged with the commit SHA.
 
@@ -198,18 +202,29 @@ GitHub in 2.5), and if run locally with
       starting image is the newest one in ECR, pinned by digest. x86_64,
       512 MB, 15 s timeout. In `terraform/site/api.tf`; 22 resources total.
 - [x] Outputs: `api_function_name`, `api_region`, `api_function_url`.
-- [ ] You: plan and apply (5 to add), after the image-only re-run above.
-- [ ] GitHub variables `API_FUNCTION_NAME` and `API_REGION` on `staging`.
+- [x] You: plan and apply (5 to add), after the image-only re-run above.
+      Checked: `one-step-staging-api` Active, Image, 512 MB, 15 s, x86_64,
+      reserved concurrency 5; a signed test call to `/api/hello` returned
+      200 with the welcome; the function URL called directly returns 403.
+- [x] GitHub variables `API_FUNCTION_NAME` (`one-step-staging-api`) and
+      `API_REGION` (`us-east-2`) on `staging`.
 
 **Done when:** the function shows as Active in the Lambda console
 (us-east-2), and calling the function URL directly returns 403.
 
 ### 2.9 AWS part 3: the CloudFront route (you run Terraform)
 
-- [ ] Terraform: Lambda-type Origin Access Control, CloudFront's invoke
+- [x] Terraform: Lambda-type Origin Access Control, CloudFront's invoke
       permission(s) as current AWS docs require, and the `/api/*` behavior
       (caching disabled, query string forwarded, Host header not forwarded,
-      same security headers).
+      same security headers). Current docs require two permissions,
+      `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction`, both limited
+      to this distribution. Origin request policy
+      `Managed-AllViewerExceptHostHeader`; HTTPS only to the origin.
+- [x] You: plan and apply (3 to add, 1 to change: the distribution).
+      Checked through CloudFront: `/api/health` 200 with `9d044a6...`,
+      `/api/hello` 200, `/api/nope` the API's own 404, the page 200, the
+      function URL directly 403, security headers on API replies, alarm OK.
 
 **Done when:** these return the expected JSON through CloudFront, and the
 function URL called directly still returns 403:
@@ -221,30 +236,42 @@ curl.exe -sS "https://<your-cloudfront-domain>/api/hello"
 
 ### 2.10 Deploy the API from GitHub
 
-- [ ] Deploy role: `lambda:UpdateFunctionCode` and
+- [x] Deploy role: `lambda:UpdateFunctionCode` and
       `lambda:GetFunctionConfiguration` on this function only (Terraform).
-- [ ] Deploy workflow: after pushing the image, update the function to it,
+      No ECR change needed: Lambda added its own repository policy
+      (`LambdaECRImageRetrievalPolicy`) when the function was created.
+- [x] Deploy workflow: after pushing the image, update the function to it,
       wait for the update, verify `/api/health` reports this commit and
-      `/api/hello` returns the welcome; then the page as before.
+      `/api/hello` returns the welcome; then the page as before. The job is
+      now called `api`; the function is pinned to the image digest that
+      ECR reports. The production gate moved to the start of the `api` job,
+      so nothing ships to production before the gate passes.
+- [ ] You: one Terraform apply for 2.10 and 2.11 together (0 to add, 2 to
+      change: the deploy role policy and the response headers policy), then
+      a full Deploy run (image only not ticked).
 
 **Done when:** a Deploy run is green and `/api/health` shows that run's
 commit.
 
 ### 2.11 Page part 1: allow the script (you run Terraform)
 
-- [ ] Terraform: CSP adds `script-src 'self'; connect-src 'self'`; deploy
-      role may also upload `app.js`.
+- [x] Terraform: CSP adds `script-src 'self'; connect-src 'self'`; deploy
+      role may also upload `app.js`. Applied together with 2.10.
 
 **Done when:** `curl.exe -sS -I` on the site shows the new
 `content-security-policy`, and the page looks unchanged.
 
 ### 2.12 Page part 2: button
 
-- [ ] `web/index.html`: button and result line; the title stays
+- [x] `web/index.html`: button and result line; the title stays
       "One Step At A Time" (the health check looks for it).
-- [ ] `web/app.js`: calls `/api/hello` and shows the reply with
+- [x] `web/app.js`: calls `/api/hello` and shows the reply with
       `textContent`, never `innerHTML`.
-- [ ] Deploy workflow: uploads and verifies `app.js` with `index.html`.
+- [x] Deploy workflow: uploads and verifies `app.js` with `index.html`
+      (`app.js` first, so a new page never loads an old script).
+- [x] Tested locally in Chrome behind a scratch stand-in that sent the new
+      CSP and passed `/api/*` to the dev server: the button showed the
+      welcome and the console had no messages.
 
 **Done when:** after a deploy, the button shows the welcome, the browser
 console shows no CSP errors, and the health-check alarm
@@ -252,20 +279,31 @@ stays OK.
 
 ### 2.13 Docs
 
-- [ ] README: architecture, layout, local checks, Docker.
-- [ ] `docs/staging-deployment.md`, `docs/operations.md` and the HTML guide:
+- [x] README: architecture, layout, local checks, Docker.
+- [x] `docs/staging-deployment.md`, `docs/operations.md` and the HTML guide:
       new stage for the API (ECR, the first-time order of 2.6 to 2.9, the
       Docker image), why us-east-2, how to test, troubleshooting, costs.
-- [ ] Teardown: delete the ECR images before the repository can be destroyed
-      (or mark the repository as force-delete).
-- [ ] Resource counts: 15 becomes the new total everywhere.
+      The HTML guide now has, like v1: app architecture (serve and watch),
+      infrastructure architecture, data flow, at a glance.
+- [x] Teardown: the repository is marked force-delete (`force_delete =
+      true`), so destroy removes it with its images.
+- [x] Rebuild order after a teardown: targeted apply of ECR and the deploy
+      role (5), Deploy with image only, then the normal apply (20). The
+      deploy role's Lambda statement builds the function ARN from its name
+      so the role no longer depends on the function. Not yet run end to end.
+- [x] Resource counts: 25 (15 v1 + 2 ECR + 5 Lambda + 3 CloudFront to Lambda).
+- [x] `API_REGION` is optional: the Deploy workflow reads the region from
+      `API_ECR_REPOSITORY`.
 
 **Done when:** `scripts/check-repo.sh` passes and every link works.
 
 ### 2.14 Coding-agent prompt
 
-- [ ] Update `docs/coding-agent-prompt.md` so it builds this version (the v1
-      prompt stays in tag `v1.0.0`), and re-run its checks.
+- [x] Update `docs/coding-agent-prompt.md` so it builds this version (the v1
+      prompt stays in tag `v1.0.0`), and re-run its checks. Checked by
+      rebuilding a scratch repository from the prompt's files: fmt, validate,
+      25 resources, pytest 3 passed, workflows parse, image builds and
+      answers, check-repo passes. No full rebuild by another coding agent.
 
 **Done when:** the prompt rebuilds and its checks pass.
 

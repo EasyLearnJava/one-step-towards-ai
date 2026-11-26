@@ -1,7 +1,8 @@
 # Staging deployment: step by step
 
 These instructions use Windows PowerShell, an S3 state bucket and website
-bucket in N. Virginia (`us-east-1`), and the GitHub repository
+bucket in N. Virginia (`us-east-1`), the API (ECR repository and Lambda
+function) in Ohio (`us-east-2`), and the GitHub repository
 `<owner>/<repo>`. Commands start at the repository root
 unless stated otherwise. Review costs and permissions before creating AWS
 resources; a failed deployment can still leave billable resources behind.
@@ -15,7 +16,7 @@ it changes nothing.
 
 | Account | Used for |
 |---|---|
-| Workload account | Everything this guide creates: state bucket, OIDC provider, website bucket, CloudFront, deploy role, health check, alarm and SNS topic. The AWS CLI and Terraform must use this account. |
+| Workload account | Everything this guide creates: state bucket, OIDC provider, website bucket, CloudFront, deploy role, health check, alarm and SNS topic, and for the API the ECR repository, Lambda function and its log group. The AWS CLI and Terraform must use this account. |
 | Management account | The organization's service control policies (section 1, step 3) and the combined bill and credits (section 5). |
 | Identity Center delegated admin account, if present | Manages users and sign-in permissions. Nothing to do for this project. |
 
@@ -92,6 +93,12 @@ it changes nothing.
    this organization they were already there. If the policy is ever changed
    or regenerated and errors for S3, SNS or CloudWatch in `us-east-1` return,
    check this list first.
+
+   The same policy blocks Lambda in `us-east-1` and allows everything in
+   `us-east-2`. That is why the API runs in `us-east-2`: do not add Lambda
+   to the exemption list. Lambda can pull images only from ECR in its own
+   region, so the ECR repository is in `us-east-2` too. CloudFront is
+   global, so the site keeps one address. `us-east-2` needs no SCP change.
 
 4. **GitHub OIDC provider.** Signed in to the workload account:
 
@@ -271,12 +278,24 @@ terraform plan "-var-file=..\environments\staging\site.tfvars" "-out=staging.tfp
 terraform show staging.tfplan
 ```
 
-On a first run the plan should show **15 to add**: the website bucket and its
-five settings (public access block, ownership, versioning, encryption,
-policy), the CloudFront distribution, origin access control and headers
-policy, the deploy role and its policy, the health check, the alarm, the SNS
-topic and the email subscription. Review the account, resources, permissions
-and charges. Only if the plan is correct, run:
+The configuration has **25 resources** in total:
+
+- 15 for the website (version 1): the website bucket and its five settings
+  (public access block, ownership, versioning, encryption, policy), the
+  CloudFront distribution, origin access control and headers policy, the
+  deploy role and its policy, the health check, the alarm, the SNS topic and
+  the email subscription.
+- 10 for the API (version 2), in `us-east-2` except the IAM role, its
+  policy and the CloudFront access control, which are global: the ECR
+  repository and its
+  lifecycle policy (keep the newest 5 images); the log group, execution
+  role, role policy, Lambda function and function URL; the Lambda-type
+  origin access control and two invoke permissions for CloudFront.
+
+In a **new or rebuilt environment**, a plain plan and apply cannot create
+them all at once. Follow the rebuild procedure below instead. In an
+environment that already has an image in ECR, review the plan and, only if
+it is correct, run:
 
 ```powershell
 # Apply the reviewed plan to create or change AWS resources.
@@ -286,9 +305,64 @@ terraform apply staging.tfplan
 terraform output
 ```
 
-Creating the CloudFront distribution takes several minutes. Keep the four
-outputs: `website_url`, `site_bucket_name`, `deploy_role_arn` and
-`aws_account_id`, which must be the workload account.
+### Rebuild procedure: first apply in a new environment
+
+The Lambda function starts from the newest image in ECR, which Terraform
+reads with the `aws_ecr_image` data source. A new repository is empty, so a
+plain first apply fails at that data source. The CloudFront distribution
+depends on the function, so it cannot be created first either. The deploy
+role does not: its policy builds the function's ARN from the function's
+name, so the role can exist before the function. Work in this order:
+
+1. **ECR repository and deploy role only.** From `terraform\site`:
+
+   ```powershell
+   # Plan only these two; Terraform adds what they need (the repository,
+   # the website bucket and the deploy role).
+   terraform plan "-var-file=..\environments\staging\site.tfvars" "-target=aws_ecr_lifecycle_policy.api" "-target=aws_iam_role_policy.deploy" "-out=staging.tfplan"
+   terraform show staging.tfplan
+   terraform apply staging.tfplan
+   ```
+
+   The plan shows **5 to add**: the website bucket, the ECR repository, its
+   lifecycle policy, the deploy role and its policy. Terraform warns that
+   `-target` is for exceptional cases; that is expected here.
+
+2. **First image, from GitHub.** Get the repository URL (`terraform output`
+   may not list it after a targeted apply):
+
+   ```powershell
+   # <account-id>.dkr.ecr.us-east-2.amazonaws.com/one-step-staging-api
+   aws ecr describe-repositories --repository-names one-step-staging-api --region us-east-2 --query "repositories[0].repositoryUri" --output text
+   ```
+
+   In GitHub, set `API_ECR_REPOSITORY` to that URL and check
+   `AWS_ROLE_ARN` (section 4; the role name is unchanged, so the ARN
+   usually is too). Enable the Deploy workflow if it was disabled, then run
+   it with **image only** ticked. ECR then lists one image tagged with the
+   commit SHA. No Docker is needed on your PC.
+
+3. **Everything else.** From `terraform\site`, run the plan, show and apply
+   commands at the start of this section, without `-target`. The plan shows
+   **20 to add**. Creating the CloudFront distribution takes several
+   minutes.
+
+4. **GitHub variables.** Set the variables in section 4 (`API_REGION` is
+   optional).
+
+5. **Confirm and deploy.** Confirm the SNS email (below), then run the
+   Deploy workflow in full, without **image only** (section 4).
+
+This order follows from the Terraform code; it has not yet been run end to
+end. The first staging build went piece by piece instead: repository
+(TODO piece 2.6), Deploy with **image only** (2.7), Lambda function (2.8),
+CloudFront route and permissions (2.9).
+
+Keep the outputs: `website_url`, `site_bucket_name`, `deploy_role_arn` and
+`aws_account_id`, which must be the workload account; and for the API
+`api_ecr_repository_url`, `api_region`, `api_function_name` and
+`api_function_url`. The repository URL contains the account ID: never commit
+it.
 
 AWS then emails `alert_email` a subscription confirmation from AWS
 Notifications; it may land in spam. Select **Confirm subscription** in it. The
@@ -302,9 +376,14 @@ and review a fresh plan rather than reusing the failed plan.
 ## 4. Publish using GitHub Actions
 
 Push the project to the intended repository. GitHub runs workflows only from
-`.github/workflows` at the repository root. Each push to `main` runs the
+`.github/workflows` at the repository root. All work goes directly on
+`main`; there are no feature branches. Each push to `main` runs the
 **Checks** workflow: repository rules, Terraform formatting and validation,
-and a Windows PowerShell 5.1 parse of the scripts. It never touches AWS.
+a Windows PowerShell 5.1 parse of the scripts, and the `api` job. The `api`
+job runs the tests with `python -m pytest`, builds the Docker image with the
+commit SHA (it does not push it), starts it, and checks that `/api/health`
+reports that SHA and `/api/hello` returns the welcome. Checks never touches
+AWS.
 
 Create the `staging` environment and restrict it to `main`:
 
@@ -326,27 +405,86 @@ Create the `staging` environment and restrict it to `main`:
 | `SITE_BUCKET` | Terraform output `site_bucket_name` |
 | `WEBSITE_URL` | Terraform output `website_url`, without a trailing slash |
 | `AWS_ROLE_ARN` | Terraform output `deploy_role_arn` |
+| `API_ECR_REPOSITORY` | Terraform output `api_ecr_repository_url` |
+| `API_FUNCTION_NAME` | Terraform output `api_function_name`, for example `one-step-staging-api` |
+| `API_REGION` | Optional, for reference: `us-east-2` (Terraform output `api_region`) |
+
+`API_ECR_REPOSITORY` has the form
+`<account-id>.dkr.ecr.us-east-2.amazonaws.com/one-step-staging-api`. It
+contains the account ID: keep it in GitHub, never in the repository. The
+Deploy workflow reads the API region from this URL, so it does not need
+`API_REGION`; keeping it does no harm.
 
 Until the first deployment, the CloudFront URL returns `403 Forbidden`. That
 is expected: the website bucket has no `index.html` yet.
 
 To deploy, open the **Actions** tab and select **Deploy website** in the left
 list. Select **Run workflow**, keep **Use workflow from: main** and the
-environment `staging`, then select **Run workflow** in the form. The run
-signs in to AWS as the deploy role, uploads `web/index.html`, and passes only
-when the public page matches it; it takes under a minute. Deployments are
-manual: a push never publishes the site. After pushing a fix, start a new run
-rather than **Re-run jobs**: a re-run reuses the earlier commit, and a
-production deployment requires the same commit to have succeeded in staging.
+environment `staging`, leave **image only** unticked, then select **Run
+workflow** in the form. The run has two jobs, both signed in to AWS as the
+deploy role:
+
+1. **api**: for production, first checks that this commit has a successful
+   staging deployment. Then builds the image on Linux with
+   `--provenance=false`, pushes it to ECR tagged with the commit SHA, and
+   reads its digest. It updates the Lambda function to
+   `<repository>@<digest>`, waits with `aws lambda wait function-updated`,
+   and checks that `<WEBSITE_URL>/api/health` reports this commit and
+   `/api/hello` returns the welcome.
+2. **deploy**: uploads `web/app.js`, then `web/index.html`, and passes only
+   when the public copies of both match.
+
+A full run takes a few minutes. With **image only** ticked, the run stops
+after the push; that is for an environment whose function does not exist
+yet. Deployments are manual: a push never publishes the site or the API.
+After pushing a fix, start a new run rather than **Re-run jobs**: a re-run
+reuses the earlier commit, and a production deployment requires the same
+commit to have succeeded in staging.
 
 Then check, in the workload account with the console region set to
 `us-east-1`:
 
-1. The `website_url` shows the page.
+1. The `website_url` shows the page. **Say hello to the API** shows the
+   welcome, and the browser console shows no CSP errors.
 2. **CloudWatch > Alarms > All alarms** shows `one-step-staging-unavailable`
    as **OK**. It can take a few minutes after the first deployment.
 3. **SNS > Topics > one-step-staging-alerts**, **Subscriptions** tab, shows
    the email as **Confirmed**.
+
+### Test the API
+
+From `terraform\site`, with the infrastructure credentials:
+
+```powershell
+# Terraform output website_url, for example https://d****.cloudfront.net
+$site = terraform output -raw website_url
+
+# Both return JSON; version is the deployed commit SHA.
+curl.exe -sS "$site/api/health"
+curl.exe -sS "$site/api/hello"
+
+# Any other path under /api returns 404.
+curl.exe -sS -o NUL -w "%{http_code}`n" "$site/api/other"
+
+# The function URL called directly must return 403: only CloudFront may call it.
+curl.exe -sS -o NUL -w "%{http_code}`n" "$(terraform output -raw api_function_url)api/health"
+```
+
+In the console, with the region set to `us-east-2`, **Lambda > Functions >
+one-step-staging-api** shows the function as an image with 512 MB, a 15 s
+timeout, `x86_64` and reserved concurrency 5.
+
+### If the API fails
+
+| What you see | Cause | Fix |
+|---|---|---|
+| `docker build` on your PC: `CERTIFICATE_VERIFY_FAILED` from `pip` | Zscaler or another HTTPS-inspecting proxy re-signs HTTPS | Build with `--secret id=ca,src=<path-to-ca-bundle.pem>` (see the README). |
+| ECR shows an image index plus an attestation for one push, and Lambda rejects it | The build added a provenance attestation | Build with `--provenance=false` (the Deploy workflow does) and push again. |
+| Checks or Deploy: `429 Too Many Requests`, `Data limit exceeded`, from `public.ecr.aws` | GitHub's shared runner IP addresses pull the Lambda Web Adapter image without logging in, and hit AWS's anonymous limit | Re-run the failed job; it reuses the same commit, which is fine here. Open issue: see [Open issues](staging-deployment-guide-v2.html#issue-429) in the version 2 guide. |
+| `/api/hello` on the site returns S3 `AccessDenied` XML | The `/api/*` route is not applied yet, or CloudFront is still rolling it out | Check that the last apply included the distribution change, and wait a few minutes. |
+| `403` with a JSON body from Lambda, through CloudFront | A CloudFront invoke permission is missing | Run `aws lambda get-policy --function-name one-step-staging-api --region us-east-2`. It must list both `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` for `cloudfront.amazonaws.com`, limited to this distribution. |
+| The function URL called directly does not return 403 | The function URL's auth type is not `AWS_IAM` | `aws lambda get-function-url-config --function-name one-step-staging-api --region us-east-2` must show `AWS_IAM`; re-apply Terraform. |
+| `uvicorn --reload` on your PC keeps serving old code | On Windows, a server started in a background shell does not get the restart signal | Stop the server and start it again. |
 
 ### If the deployment fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity"
 
@@ -386,8 +524,15 @@ first. Expected cost, from AWS's price list for `us-east-1`:
 | Route 53 health check | The check uses two optional features, HTTPS and text matching, at $1.00 each per month for AWS endpoints or $2.00 each for other endpoints. The basic check is free for the first 50 checks of AWS endpoints, otherwise $0.75 per month. |
 | CloudWatch alarm | $0.10 per month; the free tier includes 10 alarms. |
 | CloudFront, S3, SNS email | Free tier or a few cents. |
+| Lambda (API) | Always free each month: 1 million requests and 400,000 GB-seconds of compute. A hello API stays far below that. |
+| ECR (API images) | About $0.10 per GB per month. Each image is about 65 MB and the lifecycle rule keeps 5: a few cents. |
+| CloudWatch Logs (API) | Pay per GB ingested and stored; a few lines per request, kept 14 days: tiny. |
 
-About $2 to $6 per month in total, mostly the health check.
+About $2 to $6 per month for the version 1 pieces, mostly the health check.
+The API should add well under $1 a month until step 3 adds AI calls. These
+are estimates: check the AWS pricing pages for Lambda, ECR and CloudWatch
+before relying on them. The API is in `us-east-2`, so filter Cost Explorer
+by region if you want its share.
 
 ## 6. Clean up safely
 
@@ -420,10 +565,19 @@ terraform apply "staging-destroy.tfplan"
 ```
 
 Verify the resulting state and AWS resources: the apply must end with
-`15 destroyed`, and `terraform state list` must then show no site resources.
+`25 destroyed`, and `terraform state list` must then show no site resources.
 A failed apply can leave resources not represented in state; after a partial
 apply, inspect the state and AWS resources directly. Follow
 the [full teardown checklist](operations.md#7-teardown-and-verify-one-environment).
+
+The ECR repository has `force_delete = true`, so the destroy removes it with
+all its images; nothing needs deleting first. When the function was created,
+Lambda added its own repository policy, `LambdaECRImageRetrievalPolicy`.
+Terraform does not manage it; it disappears with the repository. Check
+`us-east-2` as well as `us-east-1` afterwards: ECR, Lambda and the
+`/aws/lambda/one-step-staging-api` log group must be gone. To build the
+environment again, use the
+[rebuild procedure](#rebuild-procedure-first-apply-in-a-new-environment).
 
 Keep the state bucket, OIDC provider and the SCP entries from section 1 if
 other projects may use them. Remove local `backend.hcl`, `site.tfvars`, and

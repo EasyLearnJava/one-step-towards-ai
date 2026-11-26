@@ -137,8 +137,10 @@
   <a href="#overview">What are we building?</a>
   <a href="#status">Where we are now</a>
   <a href="#need">What we need</a>
-  <a href="#architecture">Architecture</a>
+  <a href="#app-runtime">App architecture: serve and watch</a>
+  <a href="#architecture">Infrastructure architecture</a>
   <a href="#dataflow">Data flow</a>
+  <a href="#glance">At a glance</a>
   <a href="#journey">The journey, in 6 stages</a>
   <a href="#decisions">Decisions</a>
   <a href="#read">How to read this guide</a>
@@ -162,6 +164,7 @@
   <a href="#s29">2.9 CloudFront route</a>
   <div class="grp"><span class="dot" style="--c: var(--purple)">4</span>Page and release</div>
   <a href="#s211">2.11 and 2.12 The page</a>
+  <a href="#apply-run">2.10 to 2.12: apply + run</a>
   <a href="#s213">2.13 to 2.15 Docs and release</a>
   <div class="grp"><span class="dot" style="--c: var(--gold)">5</span>Reference</div>
   <a href="#files">Files in the repository</a>
@@ -169,6 +172,8 @@
   <a href="#costs">Costs</a>
   <a href="#cleanup">Clean up</a>
   <a href="#later">Later steps</a>
+  <div class="grp"><span class="dot" style="--c: var(--red)">!</span>Open issues</div>
+  <a href="#issue-429">429 from ECR Public</a>
 </aside>
 
 <main>
@@ -204,12 +209,12 @@
       <tr><td><a href="#s24">2.4</a></td><td>Docker image with the Lambda Web Adapter</td><td><span class="chip pc">Your PC</span><span class="chip dk">Docker</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s25">2.5</a></td><td>GitHub runs the tests and builds the image</td><td><span class="chip gh">GitHub</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s26">2.6</a></td><td>ECR repository in us-east-2; staging rebuilt</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
-      <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">fixed: run image only once more</span></td></tr>
-      <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip todo">code ready: your turn to apply</span></td></tr>
-      <tr><td><a href="#s29">2.9</a></td><td>CloudFront route <code>/api/*</code> to Lambda</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
-      <tr><td><a href="#s210">2.10</a></td><td>Deploy workflow updates the function</td><td><span class="chip gh">GitHub</span><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
-      <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
-      <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s29">2.9</a></td><td>CloudFront route <code>/api/*</code> to Lambda</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s210">2.10</a></td><td>Deploy workflow updates the function</td><td><span class="chip gh">GitHub</span><span class="chip work">AWS</span></td><td><span class="chip todo">code ready: one apply + one Deploy run</span></td></tr>
+      <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">code ready, tested locally: same apply + Deploy run</span></td></tr>
+      <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">docs written; tag after your checks</span></td></tr>
     </table></div>
     <div class="note"><b>Today the API runs only on your PC</b> (dev server on port 8000, Docker container on port 8001). Calling <code>/api/hello</code> on the real website would return <b>403 AccessDenied</b> from S3, because AWS has no place to run Python until pieces 2.6 to 2.9 exist. All work goes straight onto <code>main</code> (no feature branches). Deploy is a manual click, so pushing to <code>main</code> never puts anything live by itself.</div>
   </div>
@@ -232,10 +237,148 @@
   </div>
 </section>
 
+<section class="sec" id="app-runtime">
+  <div class="sketch" style="--c: var(--purple)">
+    <h2>App architecture: serve and watch</h2>
+    <p>What happens <b>after</b> everything is deployed: for every page view, every click on the button, and all the time in the background. Read the numbers in order.</p>
+    <svg class="diagram" viewBox="0 0 1060 640" role="img" aria-label="Runtime: CloudFront serves the page from S3 and the API from Lambda; Route 53 and CloudWatch watch the site">
+      <defs>
+        <filter id="rough3"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="11" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3"/></filter>
+        <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2b2b2b"/></marker>
+        <marker id="ah3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3a9a5b"/></marker>
+        <marker id="ah3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d24b47"/></marker>
+      </defs>
+
+      <!-- SERVE band -->
+      <text x="20" y="28" class="t-lane" style="fill:#3b7fc4">SERVE &#183; every page view and button click</text>
+      <rect x="20" y="80" width="170" height="110" rx="16" class="bx" style="stroke:#7b5cc4" filter="url(#rough3)"/>
+      <text x="105" y="118" class="t-h" text-anchor="middle">Browser</text>
+      <text x="105" y="144" class="t-s" text-anchor="middle">opens the page,</text>
+      <text x="105" y="166" class="t-s" text-anchor="middle">clicks the button</text>
+
+      <rect x="260" y="50" width="250" height="200" rx="18" class="bx" style="stroke:#3b7fc4" filter="url(#rough3)"/>
+      <text x="385" y="84" class="t-h" text-anchor="middle">CloudFront</text>
+      <text x="276" y="114" class="t-s2">&#8226; https:// only</text>
+      <text x="276" y="140" class="t-s2">&#8226; /* &#8594; website bucket</text>
+      <text x="276" y="166" class="t-s2">&#8226; /api/* &#8594; Lambda, signed</text>
+      <text x="276" y="192" class="t-s2">&#8226; caching off</text>
+      <text x="276" y="218" class="t-s2">&#8226; adds security headers</text>
+
+      <rect x="590" y="40" width="210" height="95" rx="16" class="bx" style="stroke:#23958a" filter="url(#rough3)"/>
+      <text x="695" y="72" class="t-h" text-anchor="middle">Website bucket</text>
+      <text x="695" y="96" class="t-s" text-anchor="middle">S3, private, us-east-1</text>
+      <text x="695" y="120" class="t-s2" text-anchor="middle">index.html, app.js</text>
+
+      <rect x="590" y="165" width="210" height="125" rx="16" class="bx" style="stroke:#e0811f" filter="url(#rough3)"/>
+      <text x="695" y="197" class="t-h" text-anchor="middle">Lambda function</text>
+      <text x="695" y="221" class="t-s" text-anchor="middle">Docker image, us-east-2</text>
+      <text x="695" y="247" class="t-s2" text-anchor="middle">Web Adapter &#8594; uvicorn</text>
+      <text x="695" y="271" class="t-s2" text-anchor="middle">FastAPI + LangChain</text>
+
+      <rect x="880" y="50" width="160" height="70" rx="16" class="bx" style="stroke:#d24b47" filter="url(#rough3)"/>
+      <text x="960" y="80" class="t-s2" text-anchor="middle">Bucket URL</text>
+      <text x="960" y="104" class="t-s2" text-anchor="middle">called directly</text>
+      <text x="960" y="140" class="t-l" text-anchor="middle" style="fill:#d24b47">&#10007; 403 Forbidden</text>
+      <rect x="880" y="195" width="160" height="70" rx="16" class="bx" style="stroke:#d24b47" filter="url(#rough3)"/>
+      <text x="960" y="225" class="t-s2" text-anchor="middle">Function URL</text>
+      <text x="960" y="249" class="t-s2" text-anchor="middle">called directly</text>
+      <text x="960" y="285" class="t-l" text-anchor="middle" style="fill:#d24b47">&#10007; 403 Forbidden</text>
+
+      <!-- requests (solid) and replies (dashed) -->
+      <path d="M190,112 L256,112" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+      <text x="223" y="102" class="t-l" text-anchor="middle">1 HTTPS</text>
+      <path d="M510,72 L586,72" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+      <text x="548" y="62" class="t-l" text-anchor="middle">2 /* (OAC)</text>
+      <path d="M586,112 L514,112" fill="none" stroke="#3a9a5b" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#ah3g)"/>
+      <text x="550" y="132" class="t-l" text-anchor="middle" style="fill:#3a9a5b">3 file</text>
+      <path d="M510,200 L586,200" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+      <text x="548" y="190" class="t-l" text-anchor="middle">4 /api/*</text>
+      <path d="M586,250 L514,250" fill="none" stroke="#3a9a5b" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#ah3g)"/>
+      <text x="550" y="272" class="t-l" text-anchor="middle" style="fill:#3a9a5b">5 JSON</text>
+      <path d="M256,162 L194,162" fill="none" stroke="#3a9a5b" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#ah3g)"/>
+      <text x="225" y="184" class="t-l" text-anchor="middle" style="fill:#3a9a5b">6 reply</text>
+      <path d="M880,85 L804,85" fill="none" stroke="#d24b47" stroke-width="2.5" stroke-dasharray="4 4" marker-end="url(#ah3r)"/>
+      <path d="M880,230 L804,230" fill="none" stroke="#d24b47" stroke-width="2.5" stroke-dasharray="4 4" marker-end="url(#ah3r)"/>
+
+      <!-- divider -->
+      <path d="M20,320 L1040,320" stroke="#cfc8b8" stroke-width="2" stroke-dasharray="8 8"/>
+
+      <!-- WATCH band -->
+      <text x="20" y="355" class="t-lane" style="fill:#d24b47">WATCH &#183; all the time</text>
+      <rect x="20" y="380" width="170" height="90" rx="16" class="bx" style="stroke:#3a9a5b" filter="url(#rough3)"/>
+      <text x="105" y="412" class="t-h" text-anchor="middle">Route 53</text>
+      <text x="105" y="438" class="t-s2" text-anchor="middle">loads the page</text>
+      <text x="105" y="460" class="t-s2" text-anchor="middle">every 30 s</text>
+      <rect x="230" y="380" width="170" height="90" rx="16" class="bx" style="stroke:#3a9a5b" filter="url(#rough3)"/>
+      <text x="315" y="412" class="t-h" text-anchor="middle">Health result</text>
+      <text x="315" y="440" class="t-s2" text-anchor="middle">1 healthy, 0 not</text>
+      <rect x="440" y="380" width="190" height="90" rx="16" class="bx" style="stroke:#d24b47" filter="url(#rough3)"/>
+      <text x="535" y="412" class="t-h" text-anchor="middle">CloudWatch alarm</text>
+      <text x="535" y="440" class="t-s2" text-anchor="middle">below 1 for 2 min</text>
+      <rect x="670" y="390" width="130" height="70" rx="16" class="bx" style="stroke:#c99a06" filter="url(#rough3)"/>
+      <text x="735" y="431" class="t-h" text-anchor="middle">SNS</text>
+      <rect x="840" y="390" width="180" height="70" rx="16" class="bx" style="stroke:#c99a06" filter="url(#rough3)"/>
+      <text x="930" y="420" class="t-h" text-anchor="middle">Your email</text>
+      <text x="930" y="444" class="t-s2" text-anchor="middle">ALARM / OK</text>
+      <path d="M190,425 L226,425" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+      <path d="M400,425 L436,425" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+      <path d="M630,425 L666,425" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+      <path d="M800,425 L836,425" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+
+      <rect x="20" y="510" width="170" height="80" rx="16" class="bx" style="stroke:#e0811f" filter="url(#rough3)"/>
+      <text x="105" y="544" class="t-h" text-anchor="middle">Every API call</text>
+      <text x="105" y="570" class="t-s2" text-anchor="middle">prints log lines</text>
+      <rect x="230" y="510" width="400" height="80" rx="16" class="bx" style="stroke:#5d5a55" filter="url(#rough3)"/>
+      <text x="430" y="542" class="t-h" text-anchor="middle">CloudWatch Logs (us-east-2)</text>
+      <text x="430" y="568" class="t-s2" text-anchor="middle">/aws/lambda/one-step-staging-api, 14 days</text>
+      <path d="M190,550 L226,550" fill="none" stroke="#2b2b2b" stroke-width="2.5" marker-end="url(#ah3)"/>
+      <text x="660" y="545" class="t-l">REPORT line per call: duration,</text>
+      <text x="660" y="567" class="t-l">memory, cold start (Init Duration)</text>
+
+      <!-- legend -->
+      <path d="M20,625 L60,625" stroke="#2b2b2b" stroke-width="2.5"/><text x="68" y="630" class="t-l">request</text>
+      <path d="M150,625 L190,625" stroke="#3a9a5b" stroke-width="2.5" stroke-dasharray="7 5"/><text x="198" y="630" class="t-l">reply</text>
+      <path d="M260,625 L300,625" stroke="#d24b47" stroke-width="2.5" stroke-dasharray="4 4"/><text x="308" y="630" class="t-l">blocked</text>
+    </svg>
+
+    <div class="two">
+      <div>
+        <h3>Serve: one click on the button</h3>
+        <ol class="steps" style="--c: var(--blue)">
+          <li>The browser opens <code>https://d****.cloudfront.net</code>. CloudFront fetches <code>index.html</code> and <code>app.js</code> from the private bucket (arrows 2 and 3) and sends them back with the security headers. The page appears.</li>
+          <li>The visitor clicks <b>Say hello to the API</b>. <code>app.js</code> calls <code>/api/hello</code> on the <b>same address</b> (arrow 1 again), which the page's security policy allows (<code>connect-src 'self'</code>).</li>
+          <li>CloudFront sees the path starts with <code>/api/</code> and sends it to the Lambda function URL, <b>signed</b> with its own AWS identity (arrow 4). It passes the visitor's headers on, except Host.</li>
+          <li>Lambda checks the signature and its two permissions: only this CloudFront distribution may call. It starts the container if none is running (a "cold start", about a second or two), otherwise reuses a warm one.</li>
+          <li>Inside the container, the Lambda Web Adapter turns the call into a normal HTTP request to uvicorn on port 8000. FastAPI runs <code>hello()</code>, which fills the LangChain template and returns JSON (arrow 5).</li>
+          <li>CloudFront adds the security headers and returns the JSON (arrow 6). <code>app.js</code> shows the message with <code>textContent</code>. Nothing is cached, so every click reaches the API.</li>
+          <li>Anyone calling the bucket's or the function's own URL directly gets <b>403</b>: only CloudFront may read or call them.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>Watch: health check and logs</h3>
+        <ol class="steps" style="--c: var(--red)">
+          <li>Route 53 health checkers load the <b>page</b> (not the API) over HTTPS every 30 seconds, through CloudFront like a visitor, and look for the title <i>One Step At A Time</i>.</li>
+          <li>The result becomes the metric <code>HealthCheckStatus</code>: 1 healthy, 0 unhealthy.</li>
+          <li>The CloudWatch alarm switches to <b>ALARM</b> when the value stays below 1 for 2 minutes, and back to <b>OK</b> when it recovers.</li>
+          <li>Each change goes to SNS, which emails you: one email when the site breaks, one when it recovers.</li>
+          <li>Separately, everything the API prints (uvicorn's request lines, Lambda's <code>START</code>, <code>END</code> and <code>REPORT</code> lines) lands in the API's log group, kept 14 days.</li>
+        </ol>
+        <div class="note"><b>Not watched yet:</b> the health check only looks at the page. If the API breaks while the page works, no alarm fires. The Deploy workflow checks the API after every release; an API alarm is a later step.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="sec" id="architecture">
   <div class="sketch alt" style="--c: var(--blue)">
-    <h2>Architecture</h2>
-    <p>One public address for both the page and the API. The new pieces are in the <b>us-east-2</b> area. Numbers are explained in the table underneath.</p>
+    <h2>Infrastructure architecture: build, deploy, serve, watch</h2>
+    <p>Every AWS piece and who talks to whom. One public address for both the page and the API; the new pieces are in the <b>us-east-2</b> area. Numbers are explained in the table underneath.</p>
+    <div class="wwy">
+      <div style="--bc: var(--teal); --bg: #e8f6f4"><b class="l">BUILD</b>Terraform on your PC creates every AWS piece (25 resources) and remembers them in the state bucket.</div>
+      <div style="--bc: var(--orange); --bg: #fff4e5"><b class="l">DEPLOY</b>GitHub signs in without keys, builds the image, pushes it to ECR, switches Lambda to it, then uploads the page.</div>
+      <div style="--bc: var(--blue); --bg: #eef5fc"><b class="l">SERVE</b>CloudFront is the one HTTPS address: <code>/*</code> from the private bucket, <code>/api/*</code> from the private Lambda function.</div>
+      <div style="--bc: var(--red); --bg: #fdeeee"><b class="l">WATCH</b>Route 53 checks the page, CloudWatch raises an alarm, SNS emails you; the API's logs go to CloudWatch Logs.</div>
+    </div>
     <svg class="diagram" viewBox="0 0 1060 560" role="img" aria-label="Version 2 architecture: CloudFront sends the page path to S3 and /api to a Lambda function running a Docker image from ECR">
       <defs>
         <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3"/></filter>
@@ -284,8 +427,9 @@
       <text x="920" y="334" class="t-s" text-anchor="middle">image storage</text>
       <!-- deploy role -->
       <rect x="262" y="420" width="220" height="90" rx="14" class="bx" style="stroke:#e0811f" filter="url(#rough)"/>
-      <text x="372" y="456" class="t-h" text-anchor="middle">IAM deploy role</text>
-      <text x="372" y="484" class="t-s" text-anchor="middle">GitHub signs in (OIDC)</text>
+      <text x="372" y="450" class="t-h" text-anchor="middle">IAM deploy role</text>
+      <text x="372" y="474" class="t-s" text-anchor="middle">GitHub signs in (OIDC);</text>
+      <text x="372" y="496" class="t-s" text-anchor="middle">also uploads the page</text>
       <rect x="560" y="420" width="230" height="80" rx="14" class="bx" style="stroke:#5d5a55" filter="url(#rough)"/>
       <text x="675" y="454" class="t-h" text-anchor="middle">CloudWatch Logs</text>
       <text x="675" y="482" class="t-s" text-anchor="middle">API log lines, 14 days</text>
@@ -306,6 +450,8 @@
       <text x="812" y="304" class="t-l" text-anchor="middle">image</text>
       <path d="M675,370 L675,416" class="ar"/>
       <path d="M800,121 L764,121" class="ar"/>
+      <path d="M470,420 C500,398 540,392 590,374" class="ar"/>
+      <text x="462" y="404" class="t-l" text-anchor="end">switch image</text>
       <!-- badges -->
       <g class="badge"><circle cx="24" cy="234" r="14"/><text x="24" y="240" text-anchor="middle">1</text></g>
       <g class="badge"><circle cx="266" cy="204" r="14"/><text x="266" y="210" text-anchor="middle">2</text></g>
@@ -321,11 +467,11 @@
       <tr><th>#</th><th>Piece</th><th>What it does in version 2</th></tr>
       <tr><td>1</td><td><b>Browser</b></td><td>Opens the page as before. The new button (2.12) calls <code>/api/hello</code> on the same address, so no CORS setup is needed.</td></tr>
       <tr><td>2</td><td><b>CloudFront</b></td><td>The single front door. Paths starting with <code>/api/</code> go to Lambda; everything else goes to the bucket. Caching is off for the API, and it signs its requests to Lambda (Origin Access Control).</td></tr>
-      <tr><td>3</td><td><b>Website bucket</b></td><td>Version 1's private bucket. It will also hold <code>app.js</code>, the script behind the button.</td></tr>
+      <tr><td>3</td><td><b>Website bucket</b></td><td>Version 1's private bucket. It now also holds <code>app.js</code>, the script behind the button.</td></tr>
       <tr><td>4</td><td><b>Lambda function</b></td><td>Starts a copy of the Docker image when a request arrives and stops paying when idle. Its function URL uses <code>AWS_IAM</code> auth, so only CloudFront may call it; a direct call gets <b>403</b>. Reserved concurrency 5 caps cost and abuse.</td></tr>
       <tr><td>5</td><td><b>ECR</b></td><td>Private registry holding the images, each tagged with its commit SHA. Scans images on push; keeps only the last few.</td></tr>
       <tr><td>6</td><td><b>GitHub</b></td><td>Checks: tests and a test build on every push. Deploy: builds the real image on Linux, pushes it, switches Lambda to it, then checks <code>/api/health</code>.</td></tr>
-      <tr><td>7</td><td><b>IAM deploy role</b></td><td>Version 1's role, with new rights: push to this one ECR repository and update this one function. No AWS keys in GitHub.</td></tr>
+      <tr><td>7</td><td><b>IAM deploy role</b></td><td>Version 1's role, with new rights: upload <code>index.html</code> and <code>app.js</code>, push to this one ECR repository, and switch this one function to a new image. No AWS keys in GitHub.</td></tr>
       <tr><td>8</td><td><b>CloudWatch Logs</b></td><td>Everything the API prints lands here, kept 14 days.</td></tr>
       <tr><td>9</td><td><b>Your PC</b></td><td>You write and test the code here and run Terraform for the AWS pieces.</td></tr>
     </table></div>
@@ -374,8 +520,24 @@
       <rect x="490" y="462" width="190" height="64" rx="14" class="bx" style="stroke:#e0811f" filter="url(#rough2)"/><text x="585" y="492" class="t-s2" text-anchor="middle">Web Adapter turns it</text><text x="585" y="514" class="t-s2" text-anchor="middle">into an HTTP request</text>
       <rect x="730" y="462" width="190" height="64" rx="14" class="bx" style="stroke:#7b5cc4" filter="url(#rough2)"/><text x="825" y="492" class="t-s2" text-anchor="middle">FastAPI + LangChain</text><text x="825" y="514" class="t-s2" text-anchor="middle">template</text>
       <rect x="960" y="462" width="90" height="64" rx="14" class="bx" style="stroke:#3a9a5b" filter="url(#rough2)"/><text x="1005" y="500" class="t-s2" text-anchor="middle">JSON</text>
-      <text x="530" y="580" class="t-l" text-anchor="middle">Lanes 1 and 2 work today (lane 2 from piece 2.5). Lanes 3 and 4 need pieces 2.6 to 2.10.</text>
+      <text x="530" y="580" class="t-l" text-anchor="middle">Lanes 1, 2 and 4 work today. Lane 3's last box (switch Lambda) arrives with 2.10.</text>
     </svg>
+  </div>
+</section>
+
+<section class="sec" id="glance">
+  <div class="sketch" style="--c: var(--purple)">
+    <h2>At a glance</h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT YOU GET</b>The version 1 website plus a Python API at <code>https://d****.cloudfront.net/api/hello</code> and <code>/api/health</code>, a button on the page that calls it, and a one-click deploy that ships both.</div>
+      <div class="w-why"><b class="l">WHY THIS DESIGN</b>One address, so no CORS. The bucket and the function stay private: only CloudFront reads or calls them. No AWS keys in GitHub. Lambda costs nothing while idle. The same Docker image can later move to Fargate.</div>
+      <div class="w-where"><b class="l">WHERE IT RUNS</b>Page, health check and alarm in <b>us-east-1</b>; API (ECR, Lambda, logs) in <b>us-east-2</b>; CloudFront is global. Cost: version 1's $2 to $6 a month plus well under $1 for the API.</div>
+    </div>
+    <div class="two" style="align-items:center">
+      <div class="sketch alt" style="--c: var(--teal); text-align:center"><b class="hand" style="font-size:20px">Your PC</b><br>code, tests, Terraform<br>&darr;</div>
+      <div class="sketch" style="--c: var(--gh); text-align:center"><b class="hand" style="font-size:20px">GitHub Actions</b><br>Checks on every push; Deploy builds the image, switches Lambda, uploads the page<br>&darr;</div>
+    </div>
+    <div class="sketch" style="--c: var(--blue); text-align:center; margin-top:12px"><b class="hand" style="font-size:20px">AWS workload account</b><br><b>visitors</b> &rarr; CloudFront &rarr; private S3 bucket (<code>/*</code>) &nbsp;|&nbsp; private Lambda function from ECR (<code>/api/*</code>)<br>Route 53 health check &rarr; CloudWatch alarm &rarr; SNS email &nbsp;|&nbsp; API logs &rarr; CloudWatch Logs</div>
   </div>
 </section>
 
@@ -386,9 +548,9 @@
       <div class="sketch st" style="--c: var(--teal)"><span class="n">1</span><b>Local API</b>2.0 to 2.3<br><span class="chip done">done</span></div>
       <div class="sketch alt st" style="--c: var(--docker)"><span class="n">2</span><b>Docker image</b>2.4<br><span class="chip done">done</span></div>
       <div class="sketch st" style="--c: var(--gh)"><span class="n">3</span><b>GitHub checks</b>2.5<br><span class="chip done">done</span></div>
-      <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip todo">2.6 done, 2.8 next</span></div>
-      <div class="sketch st" style="--c: var(--orange)"><span class="n">5</span><b>Auto deploy</b>2.10<br><span class="chip todo">planned</span></div>
-      <div class="sketch alt st" style="--c: var(--purple)"><span class="n">6</span><b>Page + release</b>2.11 to 2.15<br><span class="chip todo">planned</span></div>
+      <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip done">done</span></div>
+      <div class="sketch st" style="--c: var(--orange)"><span class="n">5</span><b>Auto deploy</b>2.10<br><span class="chip todo">your apply + run</span></div>
+      <div class="sketch alt st" style="--c: var(--purple)"><span class="n">6</span><b>Page + release</b>2.11 to 2.15<br><span class="chip todo">your apply + run, then tag</span></div>
     </div>
     <p>Stages 1 to 3 happen only on your PC and GitHub, with no AWS cost. From stage 4 on, pieces change AWS, and you run Terraform yourself as in the version 1 guide.</p>
   </div>
@@ -666,7 +828,8 @@ git push</code></pre>
 
 <section class="sec" id="s27">
   <div class="sketch alt" style="--c: var(--gh)">
-    <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip todo">fixed: run image only once more</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
+    <h2><span class="num" style="--c: var(--gh)">2.7</span>First image in ECR <span class="chip done">done</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
+    <div class="ok"><b>Result (26 November 2026):</b> the second "image only" run, for commit <code>9d044a6</code>, pushed <b>one plain image</b>: Docker v2 manifest, about 65 MB, tagged with the full SHA, with no index or attestation beside it. The scan on push completed: <b>9 HIGH, 5 MEDIUM, 2 undefined</b> findings, typical for packages in the Debian base image. Not blocking for a hello API; worth a review before step 3 (open the image &rsaquo; <span class="path">Vulnerabilities</span>).</div>
     <div class="warn"><b>What happened on the first run:</b> the image for commit <code>fb5a197</code> arrived, but as <b>three</b> ECR entries: a tagged <i>image index</i>, the real image (untagged, about 65 MB) and a small untagged <i>attestation</i>. GitHub's Docker builder adds a provenance attestation by default, which turns the push into an index. Lambda does not accept an index, and the keep-5 rule would count the parts separately. <b>Fix:</b> the workflow now builds with <code>--provenance=false</code>, which pushes one plain image. <b>Run "image only" once more</b> (steps below) after the fix is on <code>main</code>. The three old entries are harmless; the lifecycle rule removes them over time, or delete them in the console.</div>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>A new <code>image</code> job in the <b>Deploy website</b> workflow: builds the image on Linux, tags it with the commit SHA, pushes it to ECR, and checks it arrived. A new run option, <b>image only</b>, stops after the push.</div>
@@ -703,12 +866,23 @@ aws ecr describe-images --region us-east-2 --repository-name one-step-staging-ap
 
 <section class="sec" id="s210">
   <div class="sketch" style="--c: var(--gh)">
-    <h2><span class="num" style="--c: var(--gh)">2.10</span>Deploy the API from GitHub <span class="chip todo">planned</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
+    <h2><span class="num" style="--c: var(--gh)">2.10</span>Deploy the API from GitHub <span class="chip todo">code ready: one apply + one Deploy run</span><span class="chip gh">GitHub</span><span class="chip work">AWS</span></h2>
     <div class="wwy">
-      <div class="w-what"><b class="l">WHAT</b>The deploy role may update this one function (Terraform). After pushing the image, the workflow switches the function to it, waits, checks <code>/api/health</code> shows this commit and <code>/api/hello</code> answers; then deploys the page as before.</div>
-      <div class="w-why"><b class="l">WHY</b>Code becomes a release like the page: one click, checked automatically.</div>
-      <div class="w-see"><b class="l">YOU'LL SEE</b>A green Deploy run, and <code>/api/health</code> showing that run's commit.</div>
+      <div class="w-what"><b class="l">WHAT</b>Every Deploy run now ships the API too: build, push, <b>switch the function to the new image</b>, check the live API, then the page.</div>
+      <div class="w-why"><b class="l">WHY</b>Code becomes a release like the page: one click, checked automatically, and the run fails loudly if the live API is not on the new commit.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>A green run with two jobs, <code>api</code> and <code>deploy</code>, and <code>/api/health</code> showing that run's commit.</div>
     </div>
+    <h3>What changed</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Where</th><th>Change</th><th>Why</th></tr>
+      <tr><td>Terraform, deploy role (<code>main.tf</code>)</td><td>May call <code>lambda:UpdateFunctionCode</code> and <code>lambda:GetFunctionConfiguration</code> on <b>this one function</b></td><td>To point the function at a new image and wait for the update. It still cannot change the function's settings, memory, role or URL.</td></tr>
+      <tr><td>Deploy workflow, job <code>api</code> (was <code>image</code>)</td><td>New steps after the push: <b>switch the function</b> to <code>repository@sha256:...</code> (the digest ECR reports), <b>wait</b> until Lambda says the update finished, <b>verify</b> <code>&lt;site&gt;/api/health</code> reports this commit and <code>/api/hello</code> the welcome (12 tries, 10 s apart)</td><td>Pinning by digest means exactly the image just built runs. Checking through the public address proves the whole path (CloudFront, Lambda, new code).</td></tr>
+      <tr><td>Deploy workflow, production gate</td><td>Moved to the <b>first</b> step of the <code>api</code> job</td><td>Before, the gate was in the page job, which now runs after the API is shipped; production could have received new API code before the gate checked anything.</td></tr>
+      <tr><td>"Image only" option</td><td>Still stops after the push (skips the switch, the check and the page)</td><td>Useful again after a teardown, before the function exists.</td></tr>
+    </table></div>
+    <div class="note">No ECR permission change was needed: when the function was created, Lambda added its own repository policy (<code>LambdaECRImageRetrievalPolicy</code>) that lets the Lambda service pull images. It is not managed by Terraform and disappears with the repository.</div>
+    <div class="ok"><b>Checked before handing over:</b> the workflow parses and runs <code>api</code> then <code>deploy</code>; the digest step fails when the image is missing; the live-API check passes against today's site; <code>terraform fmt</code> and <code>validate</code> pass.</div>
+    <p>Steps to run: see <a href="#apply-run">2.10 to 2.12: one apply and one Deploy run</a> below.</p>
   </div>
 </section>
 
@@ -821,7 +995,9 @@ aws ecr describe-images --region us-east-2 --repository-name one-step-staging-ap
 
 <section class="sec" id="s28">
   <div class="sketch" style="--c: var(--orange)">
-    <h2><span class="num" style="--c: var(--orange)">2.8</span>The Lambda function <span class="chip todo">code ready: your turn</span><span class="chip once">ONE TIME</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
+    <h2><span class="num" style="--c: var(--orange)">2.8</span>The Lambda function <span class="chip done">done</span><span class="chip once">ONE TIME</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
+    <div class="ok"><b>Result (26 November 2026):</b> <code>one-step-staging-api</code> is <b>Active</b>, package type Image, 512 MB, 15 s, x86_64, reserved concurrency 5. A signed test call to <code>/api/hello</code> returned <b>200</b> with the welcome JSON and <code>cache-control: no-store</code>, served by uvicorn through the Web Adapter. The function URL called directly returns <b>403</b>. GitHub variables <code>API_FUNCTION_NAME</code> = <code>one-step-staging-api</code> and <code>API_REGION</code> = <code>us-east-2</code> are set on <code>staging</code>.</div>
+    <div class="note"><b>At this point the website's <code>/api/hello</code> still shows <code>AccessDenied</code> (403, XML).</b> That is expected: CloudFront still sends every path to the S3 bucket, which has no <code>api/hello</code> file. Piece 2.9 adds the route.</div>
     <div class="wwy">
       <div class="w-what"><b class="l">WHAT</b>The Lambda function <code>one-step-staging-api</code> in us-east-2, running the newest image from ECR, with its log group, execution role and a <b>private</b> function URL.</div>
       <div class="w-why"><b class="l">WHY</b>This is where the API runs on AWS. It starts only when a request arrives, so there is no server to look after.</div>
@@ -882,7 +1058,7 @@ Set-Location ..\..</code></pre>
       <li><b>Add variable</b> <code>API_FUNCTION_NAME</code> = <code>api_function_name</code>.</li>
       <li><b>Add variable</b> <code>API_REGION</code> = <code>api_region</code>.</li>
     </ol>
-    <p>The <code>staging</code> environment then has six variables: <code>AWS_ROLE_ARN</code>, <code>SITE_BUCKET</code>, <code>WEBSITE_URL</code>, <code>API_ECR_REPOSITORY</code>, <code>API_FUNCTION_NAME</code>, <code>API_REGION</code> (plus <code>AWS_REGION</code> from version 1, if you set it there).</p>
+    <p>The <code>staging</code> environment then has: <code>AWS_ROLE_ARN</code>, <code>AWS_REGION</code>, <code>SITE_BUCKET</code>, <code>WEBSITE_URL</code> (version 1), <code>API_ECR_REPOSITORY</code>, <code>API_FUNCTION_NAME</code> and <code>API_REGION</code>. <code>API_REGION</code> is for reference only: the Deploy workflow reads the region from <code>API_ECR_REPOSITORY</code>.</p>
 
     <h3>Step D &middot; Check it worked</h3>
     <div class="tablewrap"><table>
@@ -910,15 +1086,82 @@ Get-Content "$env:TEMP\health-out.json"
 
 <section class="sec" id="s29">
   <div class="sketch alt" style="--c: var(--blue)">
-    <h2><span class="num" style="--c: var(--blue)">2.9</span>The CloudFront route <span class="chip todo">planned</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span></h2>
-    <div class="wwy">
-      <div class="w-what"><b class="l">WHAT</b>A Lambda-type Origin Access Control, CloudFront's permission to invoke the function, and an <code>/api/*</code> behavior (caching off, Host header not forwarded, same security headers).</div>
-      <div class="w-why"><b class="l">WHY</b>One public address for page and API; the function stays private.</div>
-      <div class="w-see"><b class="l">YOU'LL SEE</b>The JSON replies through the website address, while the function URL alone still returns 403.</div>
+    <h2><span class="num" style="--c: var(--blue)">2.9</span>The CloudFront route <span class="chip done">done</span><span class="chip once">ONE TIME</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span></h2>
+    <div class="ok"><b>Result (26 November 2026): the API is live on the website.</b>
+      <div class="tablewrap"><table>
+        <tr><th>Check</th><th>Result</th></tr>
+        <tr><td><code>/api/health</code></td><td>200, <code>{"status":"ok","version":"9d044a6..."}</code>: the commit running in Lambda</td></tr>
+        <tr><td><code>/api/hello</code></td><td>200, the welcome JSON</td></tr>
+        <tr><td><code>/api/nope</code></td><td>404 <code>{"detail":"Not Found"}</code>: the API's own reply, not S3's</td></tr>
+        <tr><td>The page <code>/</code></td><td>200, unchanged</td></tr>
+        <tr><td>Function URL directly</td><td>403, still private</td></tr>
+        <tr><td>Headers on API replies</td><td><code>Content-Security-Policy</code>, <code>Strict-Transport-Security</code>, <code>X-Frame-Options: DENY</code>, <code>X-Content-Type-Options: nosniff</code>, <code>cache-control: no-store</code>; <code>X-Cache: Miss from cloudfront</code> (never cached)</td></tr>
+        <tr><td>Health-check alarm</td><td>OK</td></tr>
+      </table></div>
     </div>
-<pre><code>curl.exe -sS "https://d****.cloudfront.net/api/health"
-curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
-    <div class="note"><b>Known limit for step 3:</b> POST requests through CloudFront's signing to Lambda need the page to send a SHA-256 hash of the body (<code>x-amz-content-sha256</code>). Not needed for the two GET routes.</div>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>CloudFront learns a second destination: paths starting with <code>/api/</code> go to the Lambda function URL, signed; everything else still goes to the bucket.</div>
+      <div class="w-why"><b class="l">WHY</b>One public address for page and API, no CORS, and the function stays private: only this CloudFront distribution may call it.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>The JSON replies at <code>https://d****.cloudfront.net/api/hello</code> and <code>/api/health</code>, while the function URL alone still returns 403.</div>
+    </div>
+
+    <h3>What Terraform adds and changes</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Resource</th><th>File</th><th>What it does</th></tr>
+      <tr><td><code>aws_cloudfront_origin_access_control.api</code> (new)</td><td><code>api.tf</code></td><td>Origin type <code>lambda</code>, <b>always</b> sign, SigV4. CloudFront signs every request to the function URL with its own AWS identity.</td></tr>
+      <tr><td><code>aws_lambda_permission.cloudfront_url</code> (new)</td><td><code>api.tf</code></td><td>Lets CloudFront call the function <b>URL</b> (<code>lambda:InvokeFunctionUrl</code>, auth type <code>AWS_IAM</code>).</td></tr>
+      <tr><td><code>aws_lambda_permission.cloudfront_invoke</code> (new)</td><td><code>api.tf</code></td><td>Lets CloudFront <b>invoke</b> the function (<code>lambda:InvokeFunction</code>). Current AWS docs require both permissions; with only the first, CloudFront gets 403.</td></tr>
+      <tr><td><code>aws_cloudfront_distribution.site</code> (changed)</td><td><code>main.tf</code></td><td>A second <b>origin</b> (the function URL, HTTPS only, TLS 1.2, signed) and an <b><code>/api/*</code> behavior</b>: GET and HEAD only, caching off, visitor's headers and query string passed on <b>except Host</b>, same security headers as the page.</td></tr>
+    </table></div>
+    <p>Both permissions name this distribution in <code>source_arn</code>, so no other CloudFront distribution and no other AWS service can use them.</p>
+    <div class="note"><b>Why not pass the Host header:</b> the function URL only answers requests addressed to its own host name (<code>****.lambda-url.us-east-2.on.aws</code>). If CloudFront passed on the visitor's host (<code>d****.cloudfront.net</code>), Lambda would reject the request and the signature would not match. The managed policy <code>Managed-AllViewerExceptHostHeader</code> passes everything else.</div>
+    <div class="ok"><b>Checked before handing over:</b> <code>terraform fmt</code> and <code>validate</code> pass; the two managed CloudFront policies exist under those exact names (read-only check); the permissions match the current CloudFront docs page <i>Restrict access to an AWS Lambda function URL origin</i>. The function itself was tested first: a signed call returned the welcome, so if 2.9 fails, the cause is the route, not the code.</div>
+
+    <h3>Step A &middot; Plan and apply <span class="chip pc">Your PC</span><span class="chip manual">changes AWS</span></h3>
+    <div class="check"><b class="hd">Check first:</b> <code>terraform state list</code> shows the 22 resources from 2.6 and 2.8.</div>
+<pre><code><span class="c"># From the project root</span>
+aws sts get-caller-identity
+Set-Location .\terraform\site
+terraform init -reconfigure "-backend-config=..\environments\staging\backend.hcl"
+terraform state list                <span class="c"># 22 lines</span>
+terraform plan "-var-file=..\environments\staging\site.tfvars" "-out=staging.tfplan"
+<span class="g"># Plan: 3 to add, 1 to change, 0 to destroy.</span>
+terraform apply staging.tfplan
+<span class="g"># Apply complete! Resources: 3 added, 1 changed, 0 destroyed.</span>
+Set-Location ..\..</code></pre>
+    <h3>What to look for in the plan</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Look for</th><th>Expected</th></tr>
+      <tr><td>Total</td><td><b>3 to add, 1 to change, 0 to destroy</b></td></tr>
+      <tr><td>The 1 change</td><td><code>aws_cloudfront_distribution.site</code> <b>updated in-place</b> (<code>~</code>): one new <code>origin</code> block with <code>origin_id = "api"</code>, one new <code>ordered_cache_behavior</code> with <code>path_pattern = "/api/*"</code>. Nothing else in the distribution changes.</td></tr>
+      <tr><td>Must <b>not</b> appear</td><td><code>must be replaced</code> or <code>destroy</code> for the distribution: that would give the site a new address.</td></tr>
+      <tr><td>Permissions</td><td>Two <code>aws_lambda_permission</code>, principal <code>cloudfront.amazonaws.com</code>, <code>source_arn</code> = this distribution.</td></tr>
+    </table></div>
+    <div class="warn">The apply waits for CloudFront to roll the change out everywhere. That usually takes <b>3 to 10 minutes</b>; let it finish. During that time the page keeps working.</div>
+
+    <h3>Step B &middot; Check it worked</h3>
+<pre><code><span class="c"># Through CloudFront: the API answers</span>
+curl.exe -sS "https://d****.cloudfront.net/api/health"
+<span class="g"># {"status":"ok","version":"9d044a6973092edaec12a6fd081199fb44835d94"}</span>
+curl.exe -sS "https://d****.cloudfront.net/api/hello"
+<span class="g"># {"message":"Welcome to the agentic world! This is One Step At A Time, ..."}</span>
+
+<span class="c"># The page still works</span>
+curl.exe -sS -o NUL -w "%{http_code}`n" "https://d****.cloudfront.net/"          <span class="g"># 200</span>
+<span class="c"># Unknown API path: the API's own 404, not S3's</span>
+curl.exe -sS "https://d****.cloudfront.net/api/nope"                               <span class="g"># {"detail":"Not Found"}</span>
+<span class="c"># The function URL alone: still refused</span>
+Set-Location .\terraform\site; $url = terraform output -raw api_function_url; Set-Location ..\..
+curl.exe -sS -o NUL -w "%{http_code}`n" "${url}api/health"                          <span class="g"># 403</span></code></pre>
+    <div class="tablewrap"><table>
+      <tr><th>Check</th><th>Expected</th><th>If not</th></tr>
+      <tr><td><code>/api/health</code> and <code>/api/hello</code> in the browser</td><td>JSON, status 200. <code>version</code> is the commit of the image in Lambda (<code>9d044a6...</code>), not <code>local</code>.</td><td>Still <code>AccessDenied</code> XML: the rollout is not finished, wait a few minutes. Still there after 15 minutes: check the plan added the <code>/api/*</code> behavior.</td></tr>
+      <tr><td>The page</td><td>Unchanged, 200</td><td>Stop and check the distribution's default behavior was not changed.</td></tr>
+      <tr><td>Function URL directly</td><td><b>403</b></td><td>Anything else means the URL is open: check <code>authorization_type = "AWS_IAM"</code>.</td></tr>
+      <tr><td>Alarm</td><td><code>one-step-staging-unavailable</code> stays <b>OK</b></td><td>The health check looks at the page, not the API; an ALARM here means the page broke.</td></tr>
+    </table></div>
+    <div class="warn"><b>If <code>/api/hello</code> returns <code>{"Message":"Forbidden"}</code> or another 403 from Lambda</b> (JSON, not XML): CloudFront reaches Lambda but is refused. Check both permissions exist: <code>aws lambda get-policy --region us-east-2 --function-name one-step-staging-api</code> must list <code>AllowCloudFrontServicePrincipal</code> and <code>AllowCloudFrontServicePrincipalInvokeFunction</code>, each with this distribution's ARN.</div>
+    <div class="note"><b>Known limit for step 3:</b> POST requests through CloudFront's signing to Lambda need the page to send a SHA-256 hash of the body (<code>x-amz-content-sha256</code>); Lambda does not accept unsigned bodies. Not needed for the two GET routes.</div>
   </div>
 </section>
 
@@ -927,24 +1170,78 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
 
 <section class="sec" id="s211">
   <div class="sketch" style="--c: var(--purple)">
-    <h2><span class="num" style="--c: var(--purple)">2.11</span><span class="num" style="--c: var(--purple)">2.12</span>The page calls the API <span class="chip todo">planned</span></h2>
-    <ol class="steps" style="--c: var(--purple)">
-      <li><b>2.11, Terraform:</b> the page's security policy allows its own script and its own API (<code>script-src 'self'; connect-src 'self'</code>); the deploy role may upload <code>app.js</code>. The page looks unchanged.</li>
-      <li><b>2.12, code:</b> <code>web/index.html</code> gets a button and a result line (the title stays <b>One Step At A Time</b>, which the health check looks for). <code>web/app.js</code> calls <code>/api/hello</code> and shows the reply with <code>textContent</code>, never <code>innerHTML</code>. The Deploy workflow uploads and checks <code>app.js</code>.</li>
+    <h2><span class="num" style="--c: var(--purple)">2.11</span><span class="num" style="--c: var(--purple)">2.12</span>The page calls the API <span class="chip todo">code ready, tested locally</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT</b>A button on the page, <b>Say hello to the API</b>, that calls <code>/api/hello</code> and shows the welcome under it.</div>
+      <div class="w-why"><b class="l">WHY</b>The first time the page and the API work together, the shape every later step (ask, chat, agent) will use.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>Click the button: "Asking the API...", then the welcome sentence. No errors in the browser console.</div>
+    </div>
+    <h3>What changed</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Where</th><th>Change</th><th>Why</th></tr>
+      <tr><td>Terraform, security headers (<code>main.tf</code>, 2.11)</td><td>The Content Security Policy adds <code>script-src 'self'; connect-src 'self'</code></td><td>Version 1 allowed no scripts at all. Now the page may run <b>its own</b> <code>app.js</code> and call <b>its own</b> <code>/api</code>; scripts and calls to any other site stay blocked.</td></tr>
+      <tr><td>Terraform, deploy role (2.11)</td><td>May also upload <code>app.js</code> (still nothing else in the bucket)</td><td>The page now has two files.</td></tr>
+      <tr><td><code>web/index.html</code> (2.12)</td><td>A button, a result line, a few styles, and <code>&lt;script src="app.js" defer&gt;</code>. The title stays first: <b>One Step At A Time</b>.</td><td>The Route 53 health check looks for that title in the first 5,120 bytes (<code>scripts/check-repo.sh</code> checks it). The script is a separate file because the policy forbids inline scripts.</td></tr>
+      <tr><td><code>web/app.js</code> (2.12, new)</td><td>On click: <code>fetch("/api/hello")</code>, then shows <code>message</code> with <code>textContent</code>; on failure shows a red error line; the button is disabled while waiting</td><td><code>textContent</code> shows the reply as plain text, so nothing in it can ever run as code (never <code>innerHTML</code>). Same address, so no CORS.</td></tr>
+      <tr><td>Deploy workflow, job <code>deploy</code></td><td>Uploads <code>app.js</code> <b>first</b>, then <code>index.html</code>; checks both match the release</td><td>So a new page never loads an old script.</td></tr>
+    </table></div>
+    <div class="ok"><b>Tested locally before handing over:</b> a scratch stand-in for CloudFront (not in the repository) served <code>web/</code> with the <b>new</b> security policy and passed <code>/api/*</code> to the dev server. In Chrome, the button showed the welcome, <code>app.js</code> loaded as <code>text/javascript</code>, and the console had no messages (no policy violations).</div>
+  </div>
+</section>
+
+<section class="sec" id="apply-run">
+  <div class="sketch alt" style="--c: var(--orange)">
+    <h2>2.10 to 2.12: one apply and one Deploy run <span class="chip todo">your turn</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
+    <p>2.10 and 2.11 change only two existing resources, so they share <b>one</b> Terraform apply. Then <b>one</b> full Deploy run ships the API and the new page.</p>
+    <div class="warn"><b>Order matters:</b> apply first, then Deploy. Without the apply, the run fails at <i>Switch the Lambda function</i> (<code>AccessDenied</code> on <code>UpdateFunctionCode</code>) or at <i>Publish the page</i> (<code>AccessDenied</code> on <code>app.js</code>), and the button would be blocked by the old security policy.</div>
+    <h3>Step A &middot; Plan and apply <span class="chip pc">Your PC</span><span class="chip manual">changes AWS</span></h3>
+<pre><code><span class="c"># From the project root</span>
+aws sts get-caller-identity
+Set-Location .\terraform\site
+terraform init -reconfigure "-backend-config=..\environments\staging\backend.hcl"
+terraform plan "-var-file=..\environments\staging\site.tfvars" "-out=staging.tfplan"
+<span class="g"># Plan: 0 to add, 2 to change, 0 to destroy.</span>
+terraform apply staging.tfplan
+Set-Location ..\..</code></pre>
+    <div class="tablewrap"><table>
+      <tr><th>Look for in the plan</th><th>Expected</th></tr>
+      <tr><td>Total</td><td><b>0 to add, 2 to change, 0 to destroy</b></td></tr>
+      <tr><td><code>aws_iam_role_policy.deploy</code> (~ update in-place)</td><td><code>s3:PutObject</code> now lists <code>index.html</code> <b>and</b> <code>app.js</code>; a new statement with <code>lambda:GetFunctionConfiguration</code> and <code>lambda:UpdateFunctionCode</code> on the function's ARN</td></tr>
+      <tr><td><code>aws_cloudfront_response_headers_policy.site</code> (~ update in-place)</td><td>The policy text gains <code>script-src 'self'; connect-src 'self'</code></td></tr>
+      <tr><td>Must <b>not</b> appear</td><td>Any add, destroy or replace; any change to the distribution or the function</td></tr>
+    </table></div>
+<pre><code><span class="c"># After the apply: the page now sends the new policy (a minute or two after)</span>
+curl.exe -sS -I "https://d****.cloudfront.net/" | Select-String content-security-policy
+<span class="g"># content-security-policy: default-src 'none'; script-src 'self'; connect-src 'self'; ...</span></code></pre>
+    <h3>Step B &middot; Push and run Deploy <span class="chip gh">GitHub</span></h3>
+    <ol class="steps" style="--c: var(--gh)">
+      <li>The code is on <code>main</code> (Claude pushed it). Wait for <b>Checks</b> on that commit to be green.</li>
+      <li><span class="path">Actions &rsaquo; Deploy website &rsaquo; Run workflow</span>: branch <code>main</code>, environment <code>staging</code>, <b>image only NOT ticked</b>.</li>
+      <li>Watch two jobs: <code>api</code> (build, push, switch, verify: about 2 to 4 minutes) then <code>deploy</code> (page).</li>
     </ol>
-    <p class="see-label">Done when:</p>
-    <p>The button shows the welcome, the browser console has no security-policy errors, and the version 1 health-check alarm stays OK.</p>
+    <h3>Step C &middot; Check it worked</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Check</th><th>Expected</th></tr>
+      <tr><td>The run</td><td>Green. <code>api</code> ends with <i>Verified API &lt;SHA&gt; at .../api</i>; <code>deploy</code> with <i>Verified release &lt;SHA&gt;</i>.</td></tr>
+      <tr><td><code>/api/health</code> in the browser</td><td><code>version</code> = <b>this run's commit</b>, no longer <code>9d044a6...</code></td></tr>
+      <tr><td>The page</td><td>Shows the button. Click it: the welcome appears under it.</td></tr>
+      <tr><td>Browser console (F12 &rsaquo; Console)</td><td>No red errors, in particular nothing mentioning <i>Content Security Policy</i></td></tr>
+      <tr><td>Health-check alarm</td><td>Stays <b>OK</b> (the page title is unchanged)</td></tr>
+      <tr><td>Lambda console</td><td><span class="path">one-step-staging-api &rsaquo; Image</span> shows the new digest</td></tr>
+    </table></div>
+    <div class="warn"><b>If the button shows "Sorry, the API could not be reached"</b>: open F12 &rsaquo; Console. A <i>Refused to connect ... Content Security Policy</i> message means the 2.11 apply has not reached CloudFront yet (wait, then reload). A 403 or 5xx means the API itself; open <code>/api/hello</code> directly and check the Lambda log group. <b>If <code>api</code> fails at the verify step</b> after "Function ... now runs": the switch worked but the live API still reports the old commit; re-run the job once (an old copy may have answered), then check the log group.</div>
   </div>
 </section>
 
 <section class="sec" id="s213">
   <div class="sketch alt" style="--c: var(--gold)">
-    <h2><span class="num" style="--c: var(--gold)">2.13</span>to<span class="num" style="--c: var(--gold)">2.15</span>Docs and release <span class="chip todo">planned</span></h2>
+    <h2><span class="num" style="--c: var(--gold)">2.13</span>to<span class="num" style="--c: var(--gold)">2.15</span>Docs and release <span class="chip todo">docs written; tag after your checks</span></h2>
     <ol class="steps" style="--c: var(--gold)">
-      <li><b>2.13:</b> README, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code> and this guide get the real commands and screenshots for 2.5 to 2.12; resource counts updated everywhere.</li>
-      <li><b>2.14:</b> <code>docs/coding-agent-prompt.md</code> rebuilds this version (version 1's prompt stays in tag <code>v1.0.0</code>).</li>
-      <li><b>2.15:</b> wait for Checks on <code>main</code>, then tag <code>v2.0.0</code>. Production stays for step 6.</li>
+      <li><b>2.13:</b> README, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code> and this guide cover version 2: the API, the Docker image, why us-east-2, how to test, troubleshooting, costs, teardown and the rebuild order. Resource count: <b>25</b> (15 from version 1, +2 ECR, +5 Lambda pieces, +3 CloudFront-to-Lambda).</li>
+      <li><b>2.14:</b> <code>docs/coding-agent-prompt.md</code> builds version 2; version 1's prompt stays in tag <code>v1.0.0</code>.</li>
+      <li><b>2.15:</b> after your Deploy run is green and the button works (above), tag <code>v2.0.0</code> on that commit. Production stays for step 6.</li>
     </ol>
+    <div class="note"><b>Why the tag waits for you:</b> <code>v2.0.0</code> should mark a commit that is known to work live. That needs the 2.10/2.11 apply and a green Deploy run, which only you can do.</div>
   </div>
 </section>
 
@@ -963,9 +1260,12 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
       <tr><td><code>pyproject.toml</code></td><td>pytest settings only</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>.github/workflows/checks.yml</code></td><td>New <code>api</code> job: tests, image build, start-up check (2.5)</td><td><span class="chip done">on main</span></td></tr>
-      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and its lifecycle rule (2.6, applied); Lambda function, log group, execution role, function URL (2.8)</td><td><span class="chip done">on main</span> <span class="chip todo">2.8 part not applied yet</span></td></tr>
-      <tr><td><code>terraform/site/versions.tf</code>, <code>main.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider, ECR push rights for the deploy role, new outputs (2.6)</td><td><span class="chip done">on main, applied</span></td></tr>
-      <tr><td><code>.github/workflows/deploy.yml</code></td><td>New <code>image</code> job and the "image only" option (2.7)</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and lifecycle rule (2.6), Lambda function, log group, execution role, function URL (2.8), all applied; CloudFront access control and the two invoke permissions (2.9)</td><td><span class="chip done">2.6, 2.8 applied</span> <span class="chip todo">2.9 part not applied, not committed</span></td></tr>
+      <tr><td><code>terraform/site/versions.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider (2.6); outputs for ECR, region, function name and URL (2.6, 2.8)</td><td><span class="chip done">on main, applied</span></td></tr>
+      <tr><td><code>terraform/site/main.tf</code></td><td>ECR push rights (2.6, applied); <code>/api/*</code> origin and behavior (2.9, applied); deploy role may update the function and upload <code>app.js</code>, CSP allows own script and API (2.10, 2.11)</td><td><span class="chip done">on main</span> <span class="chip todo">2.10/2.11 part: your apply</span></td></tr>
+      <tr><td><code>.github/workflows/deploy.yml</code></td><td>Job <code>api</code>: production gate, build, push (no provenance), switch the function to the image digest, verify the live API; job <code>deploy</code>: <code>app.js</code> then <code>index.html</code>, both verified (2.7, 2.10, 2.12)</td><td><span class="chip done">on main</span></td></tr>
+      <tr><td><code>web/index.html</code>, <code>web/app.js</code></td><td>The button that calls <code>/api/hello</code> (2.12)</td><td><span class="chip done">on main</span> <span class="chip todo">live after your Deploy run</span></td></tr>
+      <tr><td><code>README.md</code>, <code>docs/staging-deployment.md</code>, <code>docs/operations.md</code>, <code>docs/coding-agent-prompt.md</code></td><td>Version 2 documentation (2.13, 2.14)</td><td><span class="chip done">on main</span></td></tr>
       <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on main</span> (updated for 2.5 and 2.6)</td></tr>
       <tr><td><code>TODO.md</code></td><td>The step 2 plan, piece by piece</td><td><span class="chip done">on main</span></td></tr>
     </table></div>
@@ -1009,7 +1309,16 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
   <div class="sketch alt" style="--c: var(--ink)">
     <h2>Clean up <span class="chip todo">planned</span></h2>
     <p>Same steps as the version 1 guide's teardown (pause deploys, <code>terraform plan -destroy</code>, review, apply), with one extra point:</p>
-    <div class="warn"><b>ECR first.</b> AWS will not delete a repository that still holds images. Either delete the images before <code>terraform destroy</code>, or mark the repository force-delete in Terraform. This is decided in piece 2.13.</div>
+    <div class="note"><b>ECR is handled:</b> AWS will not delete a repository that still holds images, so the repository is marked <code>force_delete = true</code> (decided in 2.6). <code>terraform destroy</code> removes it with all its images, like the website bucket. The repository policy Lambda added by itself goes with it. Expect <i>25 destroyed</i>, and <code>terraform state list</code> empty afterwards.</div>
+    <h3>Rebuilding after a teardown: the order</h3>
+    <p>A plain <code>terraform apply</code> into an empty account <b>fails</b>: the Lambda function starts from "the newest image in ECR", and a brand-new repository has none. The deploy role does not depend on the function (its policy builds the function's ARN from the name), so it can come first and let GitHub push the first image. Build it in this order:</p>
+    <ol class="steps" style="--c: var(--ink)">
+      <li><b>ECR and the deploy role only:</b> <code>terraform plan "-var-file=..\environments\staging\site.tfvars" "-target=aws_ecr_lifecycle_policy.api" "-target=aws_iam_role_policy.deploy" "-out=staging.tfplan"</code>, then <code>terraform apply staging.tfplan</code>. <b>5 to add</b>: the website bucket, the repository, its lifecycle rule, the deploy role and its policy. Terraform warns that <code>-target</code> is for exceptional cases; this is one.</li>
+      <li><b>GitHub:</b> set <code>API_ECR_REPOSITORY</code> to the URL from <code>aws ecr describe-repositories --repository-names one-step-staging-api --region us-east-2 --query "repositories[0].repositoryUri" --output text</code> and check <code>AWS_ROLE_ARN</code>. Then run <b>Deploy website</b> with <b>image only</b> ticked. GitHub builds and pushes the first image; no Docker on your PC.</li>
+      <li><b>Everything else:</b> a normal <code>terraform plan</code> and <code>apply</code>: <b>20 to add</b>. It builds the rest of the version 1 site, the function (from the image just pushed), the CloudFront route and the permissions.</li>
+      <li><b>GitHub:</b> update <code>SITE_BUCKET</code>, <code>WEBSITE_URL</code>, <code>API_FUNCTION_NAME</code>, <code>API_REGION</code>; confirm the new alert email; enable the Deploy workflow if it was disabled.</li>
+      <li><b>Deploy</b> (full run, image only not ticked). The site and the API are back.</li>
+    </ol>
     <h3>On your PC</h3>
 <pre><code><span class="c"># Remove the local image (Docker Desktop running)</span>
 docker image rm one-step-api
@@ -1028,6 +1337,66 @@ Remove-Item -Recurse $env:USERPROFILE\venvs\one-step</code></pre>
       <tr><td>5 &middot; Agent</td><td>A LangGraph agent with tools and conversation memory.</td></tr>
       <tr><td>6 &middot; Production</td><td>Login, firewall, alarms, production promotion.</td></tr>
       <tr><td>If Lambda is outgrown</td><td>Jobs over 15 minutes or always-on workers: the same image moves to ECS Fargate.</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<!-- ===================== OPEN ISSUES ===================== -->
+<div class="part" style="--c: var(--red)"><span class="big">Open issues</span><span class="line"></span></div>
+
+<section class="sec" id="issue-429">
+  <div class="sketch" style="--c: var(--red)">
+    <h2>429 "Too Many Requests" from ECR Public <span class="chip todo">open: to understand later</span><span class="chip gh">GitHub</span></h2>
+    <div class="wwy">
+      <div class="w-what"><b class="l">WHAT HAPPENED</b>On 26 November 2026, the <b>Checks</b> run for commit <code>9d044a6</code> failed in the <code>api</code> job's <code>docker build</code>. Our code did not break: AWS's public registry refused to send the Lambda Web Adapter image.</div>
+      <div class="w-why"><b class="l">WHY</b>GitHub's machines download from <code>public.ecr.aws</code> without logging in. AWS limits anonymous downloads per IP address, and GitHub's machines share IP addresses with thousands of other projects.</div>
+      <div class="w-see"><b class="l">FOR NOW</b>Re-run the failed job (<span class="path">Actions &rsaquo; the run &rsaquo; Re-run failed jobs</span>). A re-run usually gets another machine with another IP.</div>
+    </div>
+
+    <h3>The error</h3>
+<pre><code>#4 [internal] load metadata for docker.io/library/python:3.13-slim@sha256:7249...   <span class="g">DONE 0.6s</span>
+#3 [internal] load metadata for public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0@sha256:17cf...
+#3 ERROR: ... unexpected status from GET request to
+   https://public.ecr.aws/v2/awsguru/aws-lambda-adapter/manifests/sha256:17cf...: <span class="r">429 Too Many Requests</span>
+   <span class="r">toomanyrequests: Data limit exceeded</span>
+Dockerfile:15
+  15 | >>> COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0@sha256:17cf... /lambda-adapter /opt/extensions/lambda-adapter
+ERROR: failed to build</code></pre>
+    <p>How to read it: the Python base image from Docker Hub loaded fine (<b>DONE</b>). Only the adapter image from <code>public.ecr.aws</code> was refused, on <b>line 15</b> of the <code>Dockerfile</code>. The same Dockerfile had built fine twenty minutes earlier for <code>fb5a197</code>, in both Checks and Deploy, so the cause is outside our code.</p>
+
+    <h3>"But GitHub already has AWS access. Why no login?"</h3>
+    <p>Two reasons, and both are true at once.</p>
+    <p><b>1. The failure was in Checks, which never logs in to AWS, on purpose.</b></p>
+    <div class="tablewrap"><table>
+      <tr><th>Workflow</th><th>Logs in to AWS?</th><th>Why</th></tr>
+      <tr><td><b>Checks</b> (failed here)</td><td><b>No.</b> No AWS step at all; its first comment says "It never contacts AWS".</td><td>It runs on every push and every pull request. The repository is public, so anyone can open a pull request; giving those runs AWS credentials would let a stranger's code act in your account.</td></tr>
+      <tr><td><b>Deploy website</b></td><td><b>Yes</b>, through OIDC, as the role <code>one-step-staging-github-deploy</code>.</td><td>It only runs when you click Run, only from <code>main</code>, only in the <code>staging</code> environment.</td></tr>
+    </table></div>
+    <p><b>2. Even Deploy's login does not cover it: these are two different registries.</b></p>
+    <div class="tablewrap"><table>
+      <tr><th></th><th>Your private ECR</th><th>ECR Public (<code>public.ecr.aws</code>)</th></tr>
+      <tr><td>What is in it</td><td>Our API images</td><td>AWS's published Lambda Web Adapter image (the one that was refused)</td></tr>
+      <tr><td>Owned by</td><td>Your account, in us-east-2</td><td>AWS's public gallery, shared by everyone</td></tr>
+      <tr><td>Does Deploy log in?</td><td><b>Yes:</b> <code>docker login</code> to <code>****.dkr.ecr.us-east-2.amazonaws.com</code></td><td><b>No.</b> That login only covers the private registry.</td></tr>
+      <tr><td>Permission needed</td><td><code>ecr:GetAuthorizationToken</code> (the deploy role has it, from 2.6)</td><td><code>ecr-public:GetAuthorizationToken</code> and <code>sts:GetServiceBearerToken</code>, in us-east-1 (the deploy role does <b>not</b> have them)</td></tr>
+    </table></div>
+    <p>So "GitHub has AWS access" means: <b>Deploy</b> may upload <code>index.html</code> and push to <b>our one private repository</b>, nothing more. That is least privilege, on purpose. Downloading the adapter from <code>public.ecr.aws</code> is <b>anonymous in both workflows</b>, so both can hit the shared-IP limit.</p>
+
+    <h3>Possible fixes (none made yet)</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Option</th><th>What changes</th><th>Covers</th><th>Downside</th></tr>
+      <tr><td><b>A. Re-run when it happens</b> (current)</td><td>Nothing</td><td>Both workflows, by hand</td><td>A manual click each time it happens</td></tr>
+      <tr><td><b>B. Retry in the workflows</b> (recommended if it repeats)</td><td>Wrap <code>docker build</code> in up to 3 attempts, about a minute apart, in <code>checks.yml</code> and <code>deploy.yml</code></td><td>Both workflows, automatically</td><td>Does not help if the limit lasts longer than the retries</td></tr>
+      <tr><td><b>C. Log in to ECR Public in Deploy</b></td><td>Terraform: two new permissions on the deploy role; one login step in <code>deploy.yml</code></td><td>Deploy only (logged-in pulls get much higher limits)</td><td>Checks stays anonymous; needs checking that the region rule allows <code>ecr-public</code> in us-east-1</td></tr>
+      <tr><td><b>D. Give Checks AWS access</b></td><td>OIDC in Checks</td><td>Both</td><td><b>Not recommended:</b> pull requests from anyone would run with AWS credentials</td></tr>
+      <tr><td><b>E. Get the adapter from elsewhere</b></td><td>The <code>Dockerfile</code>'s line 15 points at another copy of the adapter</td><td>Both</td><td>More change, and the new source must be trusted and pinned just as carefully</td></tr>
+    </table></div>
+    <div class="note"><b>Decision rule:</b> one 429 is not worth a code change. If it happens again, add <b>B</b>. If Deploy keeps failing even with retries, add <b>C</b> as well.</div>
+
+    <h3>Log of occurrences</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Date</th><th>Workflow</th><th>Commit</th><th>Result</th></tr>
+      <tr><td>26 Nov 2026</td><td>Checks (<code>api</code> job)</td><td><code>9d044a6</code></td><td>Failed: 429 from <code>public.ecr.aws</code>. Re-ran failed jobs: <b>attempt 2 green</b>. The Deploy run for the same commit right after was green on its first attempt.</td></tr>
     </table></div>
   </div>
 </section>
