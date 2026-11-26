@@ -202,8 +202,8 @@
       <tr><td><a href="#s21">2.2</a></td><td><code>GET /api/hello</code> built with a LangChain template</td><td><span class="chip pc">Your PC</span></td><td><span class="chip done">done</span></td></tr>
       <tr><td><a href="#s23">2.3</a></td><td>Personal welcome with <code>?name=</code></td><td>&nbsp;</td><td><span class="chip dropped">dropped</span></td></tr>
       <tr><td><a href="#s24">2.4</a></td><td>Docker image with the Lambda Web Adapter</td><td><span class="chip pc">Your PC</span><span class="chip dk">Docker</span></td><td><span class="chip done">done</span></td></tr>
-      <tr><td><a href="#s25">2.5</a></td><td>GitHub runs the tests and builds the image</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">next</span></td></tr>
-      <tr><td><a href="#s26">2.6</a></td><td>ECR repository in us-east-2; staging rebuilt</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
+      <tr><td><a href="#s25">2.5</a></td><td>GitHub runs the tests and builds the image</td><td><span class="chip gh">GitHub</span></td><td><span class="chip done">done</span></td></tr>
+      <tr><td><a href="#s26">2.6</a></td><td>ECR repository in us-east-2; staging rebuilt</td><td><span class="chip work">AWS</span><span class="chip pc">Your PC</span></td><td><span class="chip todo">code ready: your turn to apply</span></td></tr>
       <tr><td><a href="#s27">2.7</a></td><td>Deploy workflow pushes the image to ECR</td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s28">2.8</a></td><td>Lambda function from the image</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s29">2.9</a></td><td>CloudFront route <code>/api/*</code> to Lambda</td><td><span class="chip work">AWS</span></td><td><span class="chip todo">planned</span></td></tr>
@@ -211,7 +211,7 @@
       <tr><td><a href="#s211">2.11, 2.12</a></td><td>Page gets a button that calls the API</td><td><span class="chip work">AWS</span><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
       <tr><td><a href="#s213">2.13 to 2.15</a></td><td>Docs, coding-agent prompt, tag <code>v2.0.0</code></td><td><span class="chip gh">GitHub</span></td><td><span class="chip todo">planned</span></td></tr>
     </table></div>
-    <div class="note"><b>Today the API runs only on your PC.</b> Calling <code>/api/hello</code> on the real website would return <b>403 AccessDenied</b> from S3, because AWS has no place to run Python until pieces 2.6 to 2.9 exist. The code is on the GitHub branch <code>step-2</code>; <code>main</code> still holds version 1.</div>
+    <div class="note"><b>Today the API runs only on your PC</b> (dev server on port 8000, Docker container on port 8001). Calling <code>/api/hello</code> on the real website would return <b>403 AccessDenied</b> from S3, because AWS has no place to run Python until pieces 2.6 to 2.9 exist. The code is on the GitHub branch <code>step-2</code>, with a pull request open and Checks green; <code>main</code> still holds version 1 until 2.15.</div>
   </div>
 </section>
 
@@ -385,8 +385,8 @@
     <div class="journey">
       <div class="sketch st" style="--c: var(--teal)"><span class="n">1</span><b>Local API</b>2.0 to 2.3<br><span class="chip done">done</span></div>
       <div class="sketch alt st" style="--c: var(--docker)"><span class="n">2</span><b>Docker image</b>2.4<br><span class="chip done">done</span></div>
-      <div class="sketch st" style="--c: var(--gh)"><span class="n">3</span><b>GitHub checks</b>2.5<br><span class="chip todo">next</span></div>
-      <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip todo">you run Terraform</span></div>
+      <div class="sketch st" style="--c: var(--gh)"><span class="n">3</span><b>GitHub checks</b>2.5<br><span class="chip done">done</span></div>
+      <div class="sketch alt st" style="--c: var(--blue)"><span class="n">4</span><b>AWS pieces</b>2.6 to 2.9<br><span class="chip todo">2.6: your turn</span></div>
       <div class="sketch st" style="--c: var(--orange)"><span class="n">5</span><b>Auto deploy</b>2.10<br><span class="chip todo">planned</span></div>
       <div class="sketch alt st" style="--c: var(--purple)"><span class="n">6</span><b>Page + release</b>2.11 to 2.15<br><span class="chip todo">planned</span></div>
     </div>
@@ -632,12 +632,35 @@ python        <span class="g">Python 3.13.18</span></code></pre>
 
 <section class="sec" id="s25">
   <div class="sketch" style="--c: var(--gh)">
-    <h2><span class="num" style="--c: var(--gh)">2.5</span>Checks on GitHub <span class="chip todo">next</span><span class="chip gh">GitHub</span></h2>
+    <h2><span class="num" style="--c: var(--gh)">2.5</span>Checks on GitHub <span class="chip done">done</span><span class="chip every">EVERY PUSH</span><span class="chip gh">GitHub</span></h2>
     <div class="wwy">
-      <div class="w-what"><b class="l">WHAT</b>A new job in <code>.github/workflows/checks.yml</code>: Python 3.13, install, <code>python -m pytest</code>, then <code>docker build</code> (no push) and a start-up check of <code>/api/health</code>. Actions pinned by commit SHA.</div>
-      <div class="w-why"><b class="l">WHY</b>Every push and pull request proves the code and the image still work, with no Docker on your PC.</div>
-      <div class="w-see"><b class="l">YOU'LL SEE</b>Every job in the <b>Checks</b> run is green.</div>
+      <div class="w-what"><b class="l">WHAT</b>A new <code>api</code> job in <code>.github/workflows/checks.yml</code>: Python 3.13, install, <code>python -m pytest</code>, <code>docker build</code> with the commit SHA (no push), then start the image and call it.</div>
+      <div class="w-why"><b class="l">WHY</b>Every pull request proves the code and the image still work on a clean Linux machine, with no Docker on your PC, before anything is deployed.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b>Three green jobs in the <b>Checks</b> run of the pull request: <code>validate</code>, <code>api</code>, <code>scripts</code>.</div>
     </div>
+    <h3>The api job, step by step</h3>
+    <ol class="steps" style="--c: var(--gh)">
+      <li>Check out the code (<code>actions/checkout</code> v4.2.2) and set up Python 3.13 (<code>actions/setup-python</code> v7.1.0). Both are pinned by commit SHA, so a changed tag cannot change what runs.</li>
+      <li><code>python -m pip install -r requirements-dev.txt</code>, then <code>python -m pytest</code>.</li>
+      <li><code>docker build --build-arg APP_VERSION=&lt;commit SHA&gt;</code>. The image is not pushed anywhere.</li>
+      <li>Start the image, wait for it, then check two things: <code>/api/health</code> reports <b>this commit's SHA</b>, and <code>/api/hello</code> returns the welcome.</li>
+      <li>Always print the container's log, so a failure shows why.</li>
+    </ol>
+    <div class="note"><b>When it runs:</b> on every <b>pull request</b> and every push to <b>main</b>. A push to <code>step-2</code> alone does not start it, so step 2 has an open pull request from <code>step-2</code> into <code>main</code>. Do not merge it until 2.15.</div>
+    <div class="ok"><b>Checked:</b> the same script was first run on the PC against an image built with a fake SHA (passed, and correctly failed when given a different SHA); then the pull request's Checks run was green. Free: the repository is public, and GitHub Actions minutes are free for public repositories.</div>
+    <h3>Validate on your PC before pushing</h3>
+    <p>GitHub repeats these checks, but running them first finds problems in seconds. Steps 2 and 3 are only needed when <code>app/</code>, the <code>Dockerfile</code> or the requirements change.</p>
+<pre><code><span class="c"># 1. Tests (venv active)</span>
+python -m pytest
+<span class="c"># 2. Build the image (the --secret is for Zscaler on your PC)</span>
+docker build --secret "id=ca,src=$env:USERPROFILE\certs\zscaler-ca-bundle.pem" --build-arg APP_VERSION=local -t one-step-api .
+<span class="c"># 3. Replace the test container and call it</span>
+docker rm -f one-step-api
+docker run -d --name one-step-api --restart unless-stopped -p 127.0.0.1:8001:8000 one-step-api
+curl.exe -s http://127.0.0.1:8001/api/health
+curl.exe -s http://127.0.0.1:8001/api/hello
+<span class="c"># 4. All good? Push</span>
+git push</code></pre>
   </div>
 </section>
 
@@ -668,13 +691,105 @@ python        <span class="g">Python 3.13.18</span></code></pre>
 
 <section class="sec" id="s26">
   <div class="sketch alt" style="--c: var(--blue)">
-    <h2><span class="num" style="--c: var(--blue)">2.6</span>Region and image registry <span class="chip todo">planned</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span></h2>
+    <h2><span class="num" style="--c: var(--blue)">2.6</span>Region and image registry <span class="chip todo">code ready: your turn</span><span class="chip once">ONE TIME</span><span class="chip work">AWS</span><span class="chip pc">Your PC</span><span class="chip gh">GitHub</span></h2>
     <div class="wwy">
-      <div class="w-what"><b class="l">WHAT</b>A second Terraform AWS provider for us-east-2; a private ECR repository (scan on push, keep the last few images); the deploy role may push to it; GitHub variable <code>API_ECR_REPOSITORY</code>.</div>
-      <div class="w-why"><b class="l">WHY</b>Lambda must be in us-east-2 (region rule), and it can only pull images from ECR in its own region.</div>
-      <div class="w-see"><b class="l">YOU'LL SEE</b>The apply succeeds and the empty repository appears in <span class="path">ECR &rsaquo; Private repositories</span> (us-east-2).</div>
+      <div class="w-what"><b class="l">WHAT</b>A private ECR repository, <code>one-step-staging-api</code>, in us-east-2, and permission for the GitHub deploy role to push images to it. The same apply rebuilds version 1's staging site.</div>
+      <div class="w-why"><b class="l">WHY</b>Lambda must be in us-east-2 (the region rule blocks it in us-east-1), and Lambda can only run images stored in ECR in its own region.</div>
+      <div class="w-see"><b class="l">YOU'LL SEE</b><i>Apply complete! Resources: 17 added</i>, the empty repository in <span class="path">ECR &rsaquo; Private repositories</span> (us-east-2), and the page live again.</div>
     </div>
-    <div class="warn"><b>Staging was destroyed</b> after version 1, so this apply also rebuilds the 15 version 1 resources. Afterwards update <code>SITE_BUCKET</code> and <code>WEBSITE_URL</code> in GitHub, confirm the new alert email, and run the deploy once for the page.</div>
+
+    <h3>What changed in Terraform</h3>
+    <div class="tablewrap"><table>
+      <tr><th>File</th><th>Change</th><th>Why</th></tr>
+      <tr><td><code>terraform/site/api.tf</code> (new)</td><td>ECR repository <code>one-step-&lt;environment&gt;-api</code>: private, scan on push, AES256 encryption, <b>force delete</b>. Lifecycle rule: keep the newest <b>5</b> images.</td><td>Stores the API images. Scanning flags known vulnerabilities. Five images keep storage at cents. Force delete lets a teardown remove the repository with its images, like the website bucket.</td></tr>
+      <tr><td><code>terraform/site/versions.tf</code></td><td>Second AWS provider, alias <code>api</code>, region <code>us-east-2</code> (one local value, <code>api_region</code>).</td><td>Version 1's resources stay in us-east-1; the API's go to us-east-2.</td></tr>
+      <tr><td><code>terraform/site/main.tf</code></td><td>The deploy role's policy gains <code>ecr:GetAuthorizationToken</code> and six push actions on <b>this one repository</b>.</td><td>GitHub (piece 2.7) must log in to ECR and push images. AWS does not allow <code>GetAuthorizationToken</code> to be limited to one repository; on its own it only allows the login.</td></tr>
+      <tr><td><code>terraform/site/outputs.tf</code></td><td>New outputs <code>api_ecr_repository_url</code> and <code>api_region</code>.</td><td>Values for the GitHub variables.</td></tr>
+    </table></div>
+    <div class="ok"><b>Checked before handing over:</b> <code>terraform fmt</code> and <code>terraform validate</code> pass (run in a scratch copy, so your <code>.terraform</code> folder was not touched); a read-only AWS call confirmed the region rule allows ECR in us-east-2 and that no repository exists there yet; repository checks pass. No new variables, so <code>site.tfvars</code> needs no change.</div>
+
+    <h3>Step A &middot; Plan and apply <span class="chip pc">Your PC</span><span class="chip manual">changes AWS</span></h3>
+    <div class="check"><b class="hd">Check first:</b> <code>aws sts get-caller-identity</code> must show the <b>workload account</b>, and <code>terraform state list</code> (after the init below) must print <b>nothing</b>, because staging was destroyed after version 1. If it lists resources, stop: the plan will not be 17 to add.</div>
+    <ol class="steps" style="--c: var(--blue)">
+      <li>Open <b>Windows PowerShell</b> in the project root and check the account.</li>
+      <li>Go to <code>terraform\site</code> and point Terraform at the <b>staging</b> state.</li>
+      <li><b>Plan</b> and read it. The last line must be <i>Plan: 17 to add, 0 to change, 0 to destroy.</i></li>
+      <li><b>Apply</b> that saved plan. It takes several minutes; CloudFront is the slowest.</li>
+      <li>Print the <b>outputs</b>; you need them in step B.</li>
+    </ol>
+<pre><code><span class="c"># 1. Right account? "Account" must be the workload account</span>
+aws sts get-caller-identity
+<span class="c"># 2. Staging backend; the list must print nothing</span>
+Set-Location .\terraform\site
+terraform init -reconfigure "-backend-config=..\environments\staging\backend.hcl"
+terraform state list
+<span class="c"># 3. Plan and read it</span>
+terraform plan "-var-file=..\environments\staging\site.tfvars" "-out=staging.tfplan"
+<span class="g"># Plan: 17 to add, 0 to change, 0 to destroy.</span>
+<span class="c"># 4. Apply exactly that plan</span>
+terraform apply staging.tfplan
+<span class="g"># Apply complete! Resources: 17 added, 0 changed, 0 destroyed.</span>
+<span class="c"># 5. The values for GitHub</span>
+terraform output
+Set-Location ..\..</code></pre>
+    <h3>What to look for in the plan</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Look for</th><th>Expected</th></tr>
+      <tr><td>Total</td><td><b>17 to add</b>: version 1's 15 resources plus <code>aws_ecr_repository.api</code> and <code>aws_ecr_lifecycle_policy.api</code>.</td></tr>
+      <tr><td><code>aws_ecr_repository.api</code></td><td><code>name = "one-step-staging-api"</code>, <code>scan_on_push = true</code>, <code>force_delete = true</code>.</td></tr>
+      <tr><td><code>aws_iam_role_policy.deploy</code></td><td>The policy JSON contains <code>s3:PutObject</code> on <code>index.html</code> and the <code>ecr:</code> actions on the repository.</td></tr>
+      <tr><td>Names</td><td>Every name says <code>staging</code>, never <code>production</code>.</td></tr>
+    </table></div>
+    <div class="warn">Anything other than <b>17 to add, 0 to change, 0 to destroy</b>? Do <b>not</b> apply. Copy the plan's summary and check it first.</div>
+    <h3>The outputs</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Output</th><th>Looks like</th><th>Used for</th></tr>
+      <tr><td><code>website_url</code></td><td><code>https://d****.cloudfront.net</code></td><td>GitHub <code>WEBSITE_URL</code> (new on every rebuild)</td></tr>
+      <tr><td><code>site_bucket_name</code></td><td><code>&lt;project&gt;-staging-site-****</code></td><td>GitHub <code>SITE_BUCKET</code> (new on every rebuild)</td></tr>
+      <tr><td><code>deploy_role_arn</code></td><td><code>arn:aws:iam::****:role/one-step-staging-github-deploy</code></td><td>GitHub <code>AWS_ROLE_ARN</code> (same name as before, so normally unchanged)</td></tr>
+      <tr><td><code>api_ecr_repository_url</code> (new)</td><td><code>****.dkr.ecr.us-east-2.amazonaws.com/one-step-staging-api</code></td><td>GitHub <code>API_ECR_REPOSITORY</code> (new)</td></tr>
+      <tr><td><code>api_region</code> (new)</td><td><code>us-east-2</code></td><td>GitHub <code>API_REGION</code> (added in 2.8)</td></tr>
+    </table></div>
+    <div class="warn"><code>api_ecr_repository_url</code> starts with your <b>AWS account ID</b>. It goes into the GitHub variable only; never paste it into a committed file, chat or screenshot.</div>
+
+    <h3>Step B &middot; GitHub environment variables <span class="chip gh">GitHub</span><span class="chip manual">MANUAL</span></h3>
+    <ol class="steps" style="--c: var(--gh)">
+      <li>Repository on GitHub &rsaquo; <span class="path">Settings &rsaquo; Environments &rsaquo; staging</span>.</li>
+      <li>Under <b>Environment variables</b>, edit <code>SITE_BUCKET</code> = <code>site_bucket_name</code> and <code>WEBSITE_URL</code> = <code>website_url</code> (no trailing slash).</li>
+      <li>Check <code>AWS_ROLE_ARN</code> still equals <code>deploy_role_arn</code>.</li>
+      <li><b>Add variable</b> &rsaquo; name <code>API_ECR_REPOSITORY</code>, value = <code>api_ecr_repository_url</code>.</li>
+    </ol>
+    <div class="tablewrap"><table>
+      <tr><th>Variable on <code>staging</code></th><th>After this piece</th></tr>
+      <tr><td><code>AWS_ROLE_ARN</code></td><td>unchanged (check)</td></tr>
+      <tr><td><code>SITE_BUCKET</code></td><td><b>updated</b></td></tr>
+      <tr><td><code>WEBSITE_URL</code></td><td><b>updated</b></td></tr>
+      <tr><td><code>API_ECR_REPOSITORY</code></td><td><b>new</b></td></tr>
+    </table></div>
+
+    <h3>Step C &middot; Confirm the alert email <span class="chip manual">MANUAL</span></h3>
+    <p>The rebuild creates a new SNS subscription. Open the email <i>AWS Notification - Subscription Confirmation</i> and click <b>Confirm subscription</b>. Until then, no alarm emails arrive.</p>
+
+    <h3>Step D &middot; Put the page back <span class="chip gh">GitHub</span></h3>
+    <ol class="steps" style="--c: var(--gh)">
+      <li><span class="path">Actions &rsaquo; Deploy website</span>. If it says the workflow is disabled (it was paused at the version 1 teardown), click <b>Enable workflow</b>.</li>
+      <li><b>Run workflow</b> &rsaquo; branch <code>main</code>, environment <code>staging</code> &rsaquo; <b>Run workflow</b>. This uploads version 1's page to the new bucket.</li>
+      <li>Wait for the run to finish green.</li>
+    </ol>
+
+    <h3>Step E &middot; Check it worked</h3>
+    <div class="tablewrap"><table>
+      <tr><th>Check</th><th>Where</th><th>Expected</th></tr>
+      <tr><td>Page is live</td><td>Browser: the new <code>website_url</code></td><td>The version 1 page</td></tr>
+      <tr><td>Repository exists</td><td>Console, region <b>us-east-2</b>: <span class="path">ECR &rsaquo; Private repositories</span></td><td><code>one-step-staging-api</code>, scan on push enabled, <b>no images</b> yet</td></tr>
+      <tr><td>Lifecycle rule</td><td>The repository &rsaquo; <span class="path">Lifecycle policy</span></td><td>One rule: keep the newest 5 images</td></tr>
+      <tr><td>Alarm</td><td>CloudWatch (us-east-1) &rsaquo; Alarms</td><td><code>one-step-staging-unavailable</code> becomes <b>OK</b> a few minutes after the page is live</td></tr>
+    </table></div>
+<pre><code><span class="c"># Same checks from PowerShell</span>
+curl.exe -sS -o NUL -w "%{http_code}`n" "&lt;website_url&gt;/"          <span class="g"># 200</span>
+aws ecr describe-repositories --region us-east-2 --query "repositories[].repositoryName"
+aws ecr describe-images --region us-east-2 --repository-name one-step-staging-api --query "imageDetails"   <span class="g"># []</span></code></pre>
+    <div class="note"><b>Cost from now on:</b> the version 1 pieces (about $2 to $6 a month, covered by credits) plus an empty ECR repository (no cost until images are stored). After this piece, 2.7 (first image in ECR) starts.</div>
   </div>
 </section>
 
@@ -742,7 +857,11 @@ curl.exe -sS "https://d****.cloudfront.net/api/hello"</code></pre>
       <tr><td><code>requirements-dev.txt</code></td><td>Adds pytest 9.2.0 and httpx2 2.16.2 (FastAPI's test client)</td><td><span class="chip done">on step-2</span></td></tr>
       <tr><td><code>tests/test_main.py</code></td><td>Health, hello, and 404 for everything else</td><td><span class="chip done">on step-2</span></td></tr>
       <tr><td><code>pyproject.toml</code></td><td>pytest settings only</td><td><span class="chip done">on step-2</span></td></tr>
-      <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip todo">not committed yet</span></td></tr>
+      <tr><td><code>Dockerfile</code>, <code>.dockerignore</code></td><td>The image recipe; only <code>app/</code> goes in</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>.github/workflows/checks.yml</code></td><td>New <code>api</code> job: tests, image build, start-up check (2.5)</td><td><span class="chip done">on step-2</span></td></tr>
+      <tr><td><code>terraform/site/api.tf</code></td><td>ECR repository and its lifecycle rule (2.6)</td><td><span class="chip done">on step-2</span> <span class="chip todo">not applied yet</span></td></tr>
+      <tr><td><code>terraform/site/versions.tf</code>, <code>main.tf</code>, <code>outputs.tf</code></td><td>us-east-2 provider, ECR push rights for the deploy role, new outputs (2.6)</td><td><span class="chip done">on step-2</span> <span class="chip todo">not applied yet</span></td></tr>
+      <tr><td><code>docs/staging-deployment-guide-v2.html</code></td><td>This guide</td><td><span class="chip done">on step-2</span> (updated for 2.5 and 2.6)</td></tr>
       <tr><td><code>TODO.md</code></td><td>The step 2 plan, piece by piece</td><td><span class="chip done">on step-2</span></td></tr>
     </table></div>
   </div>

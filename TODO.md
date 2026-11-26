@@ -157,10 +157,13 @@ GitHub in 2.5), and if run locally with
 
 ### 2.6 AWS part 1: region and image registry (you run Terraform)
 
-- [ ] Terraform: second AWS provider for us-east-2; private ECR repository
-      (scan on push, lifecycle rule keeping the last few images); output
-      the repository URL.
-- [ ] Deploy role: may push images to this repository only.
+- [x] Terraform: second AWS provider for us-east-2; private ECR repository
+      (scan on push, lifecycle rule keeping the last 5 images, force delete
+      so a teardown also removes its images); outputs the repository URL
+      and region. New file `terraform/site/api.tf`; 17 resources in total.
+- [x] Deploy role: may push images to this repository only (plus
+      `ecr:GetAuthorizationToken`, which AWS does not allow to be scoped).
+- [ ] You: plan and apply (17 to add).
 - [ ] GitHub variable `API_ECR_REPOSITORY` on `staging`.
 - [ ] The staging stack was destroyed, so this apply also rebuilds the
       existing 15 resources: update `SITE_BUCKET` and `WEBSITE_URL`, confirm
