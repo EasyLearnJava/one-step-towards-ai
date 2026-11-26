@@ -1,7 +1,9 @@
 ###############################################################################
 # FILE PURPOSE
 #   Creates the AWS resources for the Python API (version 2). Piece 2.6 adds
-#   the private ECR repository that stores the API's Docker images.
+#   the private ECR repository that stores the API's Docker images; piece 2.8
+#   adds the Lambda function that runs the newest image, its log group, its
+#   execution role and its private function URL.
 #
 # DEPENDENCY RELATIONSHIPS
 #   - versions.tf: the aws.api provider places these resources in us-east-2.
@@ -59,4 +61,107 @@ resource "aws_ecr_lifecycle_policy" "api" {
       action = { type = "expire" }
     }]
   })
+}
+
+# ---------------------------------------------------------------------------
+# STARTING IMAGE
+# The function is created from the newest image in the repository (pushed by
+# the Deploy workflow, piece 2.7). After that, the Deploy workflow ships new
+# images and Terraform ignores the image (see lifecycle below). The image is
+# pinned by digest, so a later push cannot change it silently.
+# ---------------------------------------------------------------------------
+data "aws_ecr_image" "api_start" {
+  provider        = aws.api
+  repository_name = aws_ecr_repository.api.name
+  most_recent     = true
+}
+
+# ---------------------------------------------------------------------------
+# LOG GROUP
+# Everything the API prints goes to CloudWatch Logs, kept for 14 days.
+# Created here, before the function, so Lambda does not create one that
+# keeps logs forever.
+# ---------------------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "api" {
+  provider          = aws.api
+  name              = "/aws/lambda/one-step-${var.environment}-api"
+  retention_in_days = 14
+}
+
+# ---------------------------------------------------------------------------
+# EXECUTION ROLE
+# The identity the function runs as. It may only write its own logs: no S3,
+# no other AWS access. Step 3 adds what the AI calls need.
+# ---------------------------------------------------------------------------
+data "aws_iam_policy_document" "api_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "api" {
+  name               = "one-step-${var.environment}-api"
+  assume_role_policy = data.aws_iam_policy_document.api_trust.json
+}
+
+data "aws_iam_policy_document" "api_logs" {
+  statement {
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.api.arn}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "api_logs" {
+  name   = "write-logs"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.api_logs.json
+}
+
+# ---------------------------------------------------------------------------
+# LAMBDA FUNCTION
+# Runs the Docker image. The Lambda Web Adapter inside the image turns each
+# invocation into a normal HTTP request to uvicorn, after /api/health answers.
+# Reserved concurrency 5 caps how many copies run at once: a cost and abuse
+# limit (the account allows 400 in us-east-2).
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function" "api" {
+  provider      = aws.api
+  function_name = "one-step-${var.environment}-api"
+  role          = aws_iam_role.api.arn
+  package_type  = "Image"
+  image_uri     = data.aws_ecr_image.api_start.image_uri
+  architectures = ["x86_64"]
+  memory_size   = 512
+  timeout       = 15
+
+  reserved_concurrent_executions = 5
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.api.name
+  }
+
+  depends_on = [aws_iam_role_policy.api_logs]
+
+  lifecycle {
+    # The Deploy workflow ships new code (piece 2.10); Terraform must not
+    # roll the function back to the starting image.
+    ignore_changes = [image_uri]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# PRIVATE FUNCTION URL
+# An HTTPS address for the function. AWS_IAM means every call must be signed
+# by an AWS identity allowed to invoke it; nobody is allowed yet, so a direct
+# call returns 403. Piece 2.9 lets only CloudFront call it.
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function_url" "api" {
+  provider           = aws.api
+  function_name      = aws_lambda_function.api.function_name
+  authorization_type = "AWS_IAM"
 }

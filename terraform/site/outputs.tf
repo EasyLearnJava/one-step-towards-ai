@@ -51,3 +51,13 @@ output "api_ecr_repository_url" {
 output "api_region" {
   value = local.api_region
 }
+
+# The function name becomes the GitHub variable API_FUNCTION_NAME (2.8). The
+# function URL is private: calling it directly must return 403.
+output "api_function_name" {
+  value = aws_lambda_function.api.function_name
+}
+
+output "api_function_url" {
+  value = aws_lambda_function_url.api.function_url
+}

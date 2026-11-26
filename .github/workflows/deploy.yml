@@ -53,7 +53,9 @@ jobs:
       - name: Build and push the image
         run: |
           set -euo pipefail
-          docker build --build-arg "APP_VERSION=${GITHUB_SHA}" -t "${API_ECR_REPOSITORY}:${GITHUB_SHA}" .
+          # --provenance=false: push one plain image. By default the build adds
+          # an attestation and pushes an image index, which Lambda rejects.
+          docker build --provenance=false --build-arg "APP_VERSION=${GITHUB_SHA}" -t "${API_ECR_REPOSITORY}:${GITHUB_SHA}" .
           docker push "${API_ECR_REPOSITORY}:${GITHUB_SHA}"
       - name: Verify the image is in ECR
         run: |
