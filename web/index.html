@@ -12,13 +12,21 @@
     .eyebrow { color: #1d4ed8; font-size: .9rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
     h1 { margin: 1rem 0; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 1.05; }
     p { color: #475569; font-size: clamp(1.1rem, 3vw, 1.4rem); line-height: 1.6; }
+    button { margin-top: 1rem; padding: .8rem 1.6rem; border: 0; border-radius: .6rem; background: #1d4ed8; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    button:hover { background: #1e40af; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #reply { min-height: 3.2em; color: #172554; }
+    #reply.error { color: #b91c1c; }
   </style>
+  <script src="app.js" defer></script>
 </head>
 <body>
   <main>
     <span class="eyebrow">Learning agentic applications</span>
     <h1>One Step At A Time</h1>
     <p>From curiosity to capable AI agents&mdash;one step at a time.</p>
+    <button id="hello" type="button">Say hello to the API</button>
+    <p id="reply" aria-live="polite"></p>
   </main>
 </body>
 </html>

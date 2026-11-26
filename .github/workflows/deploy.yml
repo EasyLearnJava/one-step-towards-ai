@@ -11,7 +11,7 @@ on:
           - staging
           - production
       image_only:
-        description: "Only build and push the API image to ECR (skip the page)"
+        description: "Only build and push the API image to ECR (skip the API update and the page)"
         required: false
         type: boolean
         default: false
@@ -26,16 +26,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Builds the API image on Linux, tags it with the commit SHA and pushes it to
-  # the environment's ECR repository (API_ECR_REPOSITORY, from Terraform).
-  image:
+  # The API: build the image on Linux, tag it with the commit SHA, push it to
+  # the environment's ECR repository, switch the Lambda function to it and
+  # check the live API reports this commit. "Image only" stops after the push.
+  api:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     env:
       API_ECR_REPOSITORY: ${{ vars.API_ECR_REPOSITORY }}
+      API_FUNCTION_NAME: ${{ vars.API_FUNCTION_NAME }}
+      WEBSITE_URL: ${{ vars.WEBSITE_URL }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Require this commit to have passed staging
+        if: inputs.environment == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deployments="$(gh api "repos/${GITHUB_REPOSITORY}/deployments?environment=staging&sha=${GITHUB_SHA}&per_page=100" --jq '.[].id')"
+          for id in $deployments; do
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" --jq '.[0].state')"
+            if [ "$status" = "success" ]; then
+              echo "Staging deployment ${id} succeeded for ${GITHUB_SHA}."
+              exit 0
+            fi
+          done
+          echo "No successful staging deployment found for ${GITHUB_SHA}." >&2
+          exit 1
       - name: Read registry and region from the repository URL
         run: |
           set -euo pipefail
@@ -60,18 +79,46 @@ jobs:
       - name: Verify the image is in ECR
         run: |
           set -euo pipefail
-          found="$(aws ecr batch-get-image --region "$API_REGION" \
+          digest="$(aws ecr batch-get-image --region "$API_REGION" \
             --repository-name "${API_ECR_REPOSITORY#*/}" \
             --image-ids "imageTag=${GITHUB_SHA}" \
-            --query 'length(images)' --output text)"
-          if [ "$found" != "1" ]; then
-            echo "Image ${GITHUB_SHA} not found in ECR." >&2
-            exit 1
-          fi
-          echo "Image ${GITHUB_SHA} is in ECR."
+            --query 'images[0].imageId.imageDigest' --output text)"
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "Image ${GITHUB_SHA} not found in ECR." >&2; exit 1 ;;
+          esac
+          # repository@sha256:...; the function is pinned to this exact image.
+          echo "API_IMAGE=${API_ECR_REPOSITORY}@${digest}" >> "$GITHUB_ENV"
+          echo "Image ${GITHUB_SHA} is in ECR: ${digest}"
+      - name: Switch the Lambda function to this image
+        if: ${{ !inputs.image_only }}
+        run: |
+          set -euo pipefail
+          aws lambda update-function-code --region "$API_REGION" \
+            --function-name "$API_FUNCTION_NAME" --image-uri "$API_IMAGE" > /dev/null
+          # Waits until the update has finished (or failed).
+          aws lambda wait function-updated --region "$API_REGION" --function-name "$API_FUNCTION_NAME"
+          echo "Function ${API_FUNCTION_NAME} now runs ${API_IMAGE}"
+      - name: Verify the live API runs this commit
+        if: ${{ !inputs.image_only }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error --max-time 15 "${WEBSITE_URL}/api/health" -o /tmp/health.json \
+               && grep -q "\"version\":\"${GITHUB_SHA}\"" /tmp/health.json; then
+              curl --fail --silent --show-error --max-time 15 "${WEBSITE_URL}/api/hello" | grep -q "Welcome to the agentic world"
+              echo "Verified API ${GITHUB_SHA} at ${WEBSITE_URL}/api"
+              exit 0
+            fi
+            echo "API not yet on this commit; retry ${attempt}/12."
+            sleep 10
+          done
+          echo "API verification failed." >&2
+          exit 1
 
+  # The page: index.html and app.js, after the API is live.
   deploy:
-    needs: image
+    needs: api
     if: github.ref == 'refs/heads/main' && !inputs.image_only
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
@@ -81,30 +128,22 @@ jobs:
       WEBSITE_URL: ${{ vars.WEBSITE_URL }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Require this commit to have passed staging
-        if: inputs.environment == 'production'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          deployments="$(gh api "repos/${GITHUB_REPOSITORY}/deployments?environment=staging&sha=${GITHUB_SHA}&per_page=100" --jq '.[].id')"
-          for id in $deployments; do
-            status="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" --jq '.[0].state')"
-            if [ "$status" = "success" ]; then
-              echo "Staging deployment ${id} succeeded for ${GITHUB_SHA}."
-              exit 0
-            fi
-          done
-          echo "No successful staging deployment found for ${GITHUB_SHA}." >&2
-          exit 1
       - name: Configure AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Publish HTML
+      - name: Publish the page
         run: |
           set -euo pipefail
+          # app.js first, so the new page never loads an old script.
+          aws s3api put-object \
+            --bucket "$SITE_BUCKET" \
+            --key app.js \
+            --body web/app.js \
+            --content-type 'text/javascript; charset=utf-8' \
+            --cache-control 'no-cache' \
+            --metadata "commit=${GITHUB_SHA}" > /dev/null
           aws s3api put-object \
             --bucket "$SITE_BUCKET" \
             --key index.html \
@@ -117,7 +156,9 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 12); do
             if curl --fail --silent --show-error --max-time 15 "${WEBSITE_URL}/" -o /tmp/deployed-index.html \
-               && cmp -s web/index.html /tmp/deployed-index.html; then
+               && cmp -s web/index.html /tmp/deployed-index.html \
+               && curl --fail --silent --show-error --max-time 15 "${WEBSITE_URL}/app.js" -o /tmp/deployed-app.js \
+               && cmp -s web/app.js /tmp/deployed-app.js; then
               echo "Verified release ${GITHUB_SHA} at ${WEBSITE_URL}"
               exit 0
             fi
