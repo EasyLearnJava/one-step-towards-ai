@@ -271,14 +271,34 @@ resource "aws_iam_role" "deploy" {
 
 # ---------------------------------------------------------------------------
 # DEPLOYMENT PERMISSIONS
-# Least-privilege permissions allow the GitHub role to upload only index.html.
-# It cannot list the bucket, read objects, delete the site, or modify AWS
+# Least-privilege permissions allow the GitHub role to upload only index.html
+# and to push images to the API's ECR repository (api.tf). It cannot list the
+# bucket, read objects, delete the site or images, or modify AWS
 # infrastructure resources.
 # ---------------------------------------------------------------------------
 data "aws_iam_policy_document" "deploy" {
   statement {
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.site.arn}/index.html"]
+  }
+
+  # docker login to ECR. AWS does not allow this action to be limited to one
+  # repository; the token alone grants nothing beyond the statement below.
+  statement {
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [aws_ecr_repository.api.arn]
   }
 }
 

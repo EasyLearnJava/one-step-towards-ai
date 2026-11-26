@@ -38,3 +38,16 @@ output "deploy_role_arn" {
 output "aws_account_id" {
   value = data.aws_caller_identity.current.account_id
 }
+
+# ---------------------------------------------------------------------------
+# API (VERSION 2)
+# The repository URL becomes the GitHub variable API_ECR_REPOSITORY; the
+# region becomes API_REGION.
+# ---------------------------------------------------------------------------
+output "api_ecr_repository_url" {
+  value = aws_ecr_repository.api.repository_url
+}
+
+output "api_region" {
+  value = local.api_region
+}

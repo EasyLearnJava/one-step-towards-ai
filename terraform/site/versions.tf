@@ -49,3 +49,23 @@ provider "aws" {
   alias  = "monitoring"
   region = "us-east-1"
 }
+
+# The API (ECR, and later Lambda) runs in us-east-2: the organization's region
+# rule blocks Lambda in us-east-1. CloudFront is global, so the site keeps its
+# address.
+locals {
+  api_region = "us-east-2"
+}
+
+provider "aws" {
+  alias  = "api"
+  region = local.api_region
+
+  default_tags {
+    tags = {
+      Project     = "one-step-at-a-time"
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+    }
+  }
+}
