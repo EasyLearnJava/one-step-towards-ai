@@ -144,10 +144,14 @@ GitHub in 2.5), and if run locally with
 
 ### 2.5 Checks on GitHub
 
-- [ ] `.github/workflows/checks.yml`: new job with Python 3.13 that installs
-      the requirements and runs `python -m pytest`, and a Docker build of the
-      image (no push); actions pinned by commit SHA.
-- [ ] `scripts/check-repo.sh` still passes on the new files.
+- [x] `.github/workflows/checks.yml`: new `api` job with Python 3.13 that
+      installs the requirements and runs `python -m pytest`, and a Docker
+      build of the image (no push); actions pinned by commit SHA
+      (setup-python v7.1.0). It also starts the image and checks
+      `/api/health` reports the commit SHA and `/api/hello` the welcome.
+- [x] `scripts/check-repo.sh` still passes on the new files.
+- [ ] Open a pull request from `step-2` (Checks runs on pull requests and on
+      pushes to `main` only) and see every job green.
 
 **Done when:** after you push, every Checks job is green.
 
