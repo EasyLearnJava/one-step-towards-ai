@@ -42,7 +42,8 @@ output "aws_account_id" {
 # ---------------------------------------------------------------------------
 # API (VERSION 2)
 # The repository URL becomes the GitHub variable API_ECR_REPOSITORY; the
-# region becomes API_REGION.
+# region may be kept as API_REGION for reference; the Deploy workflow reads
+# the region from the repository URL and does not need it.
 # ---------------------------------------------------------------------------
 output "api_ecr_repository_url" {
   value = aws_ecr_repository.api.repository_url

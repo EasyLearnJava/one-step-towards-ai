@@ -165,3 +165,43 @@ resource "aws_lambda_function_url" "api" {
   function_name      = aws_lambda_function.api.function_name
   authorization_type = "AWS_IAM"
 }
+
+# ---------------------------------------------------------------------------
+# CLOUDFRONT TO LAMBDA: SIGNED REQUESTS (piece 2.9)
+# CloudFront signs every request it sends to the function URL (Origin Access
+# Control, origin type lambda). With AWS_IAM auth, Lambda then accepts the
+# request only because of the two permissions below. POST requests (step 3)
+# must also carry x-amz-content-sha256, the SHA-256 of the body.
+# ---------------------------------------------------------------------------
+resource "aws_cloudfront_origin_access_control" "api" {
+  name                              = "one-step-${var.environment}-api"
+  description                       = "Signed access to the private API function URL."
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# ---------------------------------------------------------------------------
+# INVOKE PERMISSIONS FOR THIS DISTRIBUTION ONLY
+# Current AWS docs require both actions for CloudFront to call a function
+# URL: InvokeFunctionUrl and InvokeFunction. source_arn limits both to this
+# one CloudFront distribution; no other caller is allowed.
+# ---------------------------------------------------------------------------
+resource "aws_lambda_permission" "cloudfront_url" {
+  provider               = aws.api
+  statement_id           = "AllowCloudFrontServicePrincipal"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.api.function_name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.site.arn
+  function_url_auth_type = "AWS_IAM"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke" {
+  provider      = aws.api
+  statement_id  = "AllowCloudFrontServicePrincipalInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.site.arn
+}

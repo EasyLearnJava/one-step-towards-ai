@@ -112,7 +112,9 @@ resource "aws_cloudfront_response_headers_policy" "site" {
 
   security_headers_config {
     content_security_policy {
-      content_security_policy = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+      # script-src and connect-src 'self' (piece 2.11): the page may run its own
+      # app.js and call its own /api. Nothing from other sites.
+      content_security_policy = "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
       override                = true
     }
     content_type_options {
@@ -146,6 +148,15 @@ data "aws_cloudfront_cache_policy" "disabled" {
 }
 
 # ---------------------------------------------------------------------------
+# API ORIGIN REQUEST POLICY (piece 2.9)
+# Passes the visitor's query string and headers to the API, except Host: the
+# function URL must receive its own host name, or Lambda rejects the request.
+# ---------------------------------------------------------------------------
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
+  name = "Managed-AllViewerExceptHostHeader"
+}
+
+# ---------------------------------------------------------------------------
 # CLOUDFRONT WEBSITE DISTRIBUTION
 # CloudFront receives visitor requests, redirects HTTP to HTTPS, retrieves
 # objects from the private S3 origin, adds security headers, and serves
@@ -160,6 +171,35 @@ resource "aws_cloudfront_distribution" "site" {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
     origin_id                = "private-site"
     origin_access_control_id = aws_cloudfront_origin_access_control.site.id
+  }
+
+  # The API's private function URL (api.tf), reached over HTTPS only with
+  # signed requests. The URL looks like https://<id>.lambda-url.<region>.on.aws/
+  origin {
+    domain_name              = trimsuffix(trimprefix(aws_lambda_function_url.api.function_url, "https://"), "/")
+    origin_id                = "api"
+    origin_access_control_id = aws_cloudfront_origin_access_control.api.id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # /api/* goes to the API; everything else falls through to the bucket
+  # below. Never cached, same security headers as the page.
+  ordered_cache_behavior {
+    path_pattern               = "/api/*"
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+    target_origin_id           = "api"
+    viewer_protocol_policy     = "redirect-to-https"
+    cache_policy_id            = data.aws_cloudfront_cache_policy.disabled.id
+    origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.site.id
+    compress                   = true
   }
 
   default_cache_behavior {
@@ -272,14 +312,32 @@ resource "aws_iam_role" "deploy" {
 # ---------------------------------------------------------------------------
 # DEPLOYMENT PERMISSIONS
 # Least-privilege permissions allow the GitHub role to upload only index.html
-# and to push images to the API's ECR repository (api.tf). It cannot list the
-# bucket, read objects, delete the site or images, or modify AWS
-# infrastructure resources.
+# and app.js, to push images to the API's ECR repository (api.tf), and to
+# switch the API function to a new image. It cannot list the bucket, read
+# objects, delete the site or images, change the function's settings, or
+# modify AWS infrastructure resources.
 # ---------------------------------------------------------------------------
 data "aws_iam_policy_document" "deploy" {
   statement {
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.site.arn}/index.html"]
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.site.arn}/index.html",
+      "${aws_s3_bucket.site.arn}/app.js",
+    ]
+  }
+
+  # Piece 2.10: point the function at the image just pushed, then read its
+  # state while waiting for the update to finish. The ARN is built from the
+  # function's name rather than taken from the function itself, so this role
+  # can be created before the function exists: after a teardown, the first
+  # image is pushed by GitHub before the function is created (see the
+  # rebuild order in docs/staging-deployment.md).
+  statement {
+    actions = [
+      "lambda:GetFunctionConfiguration",
+      "lambda:UpdateFunctionCode",
+    ]
+    resources = ["arn:aws:lambda:${local.api_region}:${data.aws_caller_identity.current.account_id}:function:one-step-${var.environment}-api"]
   }
 
   # docker login to ECR. AWS does not allow this action to be limited to one
