@@ -1,6 +1,310 @@
-# TODO: step 2, a Python API that welcomes you to the agentic world
+# TODO
 
-**Status: complete, tagged `v2.0.0` (2026-11-26).** Next: step 3 below.
+| Step | What | Status |
+|---|---|---|
+| 2 | Python API skeleton on Lambda behind CloudFront | complete, tagged `v2.0.0` (2026-11-26) |
+| 3 | First AI answer on Amazon Bedrock (Nova Micro), streamed | in progress, below |
+
+# Step 3: first AI answer on Amazon Bedrock (Nova Micro)
+
+**Change on 2026-11-27:** while the Bedrock quotas are 0 (support case
+179580187900885), `/api/ask` calls the **OpenAI API** instead
+(`langchain-openai`, model `gpt-4.1-nano` unless `OPENAI_MODEL` says
+otherwise, key in `OPENAI_API_KEY`), and there is **no daily cap**
+(`count_question` was removed). The Bedrock plan below still applies once
+the quota is raised; the cap would then be written again from 3.3 and 3.4.
+
+The page gets a question box. The question goes to a model on Amazon Bedrock
+(Amazon Nova Micro) and the answer streams back to the page while it is being written. Step 3
+builds on the step 2 skeleton (same image, function, CloudFront address and
+Deploy workflow); nothing is rebuilt. The guardrails are live before any
+code can call the model.
+
+## What it does
+
+| Request | Reply |
+|---|---|
+| `POST /api/ask` with `{"question": "..."}` | The answer as plain text, streamed in chunks |
+| Empty question, or longer than 1,000 characters | 422, no model call |
+| Daily question cap reached | 429 "The daily question limit is reached; try again tomorrow.", no model call |
+| `GET /api/health`, `GET /api/hello` | Unchanged |
+
+```text
+Browser --POST /api/ask + x-amz-content-sha256--> CloudFront --signed (OAC)--> Lambda function URL
+                                                                               (RESPONSE_STREAM)
+                                    1. DynamoDB: add 1 to today's count, refuse at the cap
+                                    2. LangChain prompt template + the question
+                                    3. Amazon Bedrock, us-east-2: Nova Micro (IAM role, no API key)
+                                                                                     |
+Browser <------------------- answer text, streamed chunk by chunk -------------------+
+```
+
+## Decided
+
+- [x] Model platform: Amazon Bedrock in us-east-2 (2026-11-26). The Lambda
+      role gets permission to call the model; no API key exists anywhere.
+      Standard tier for `/api/ask`.
+- [x] Protection for now: one daily question cap for the whole site, plus a
+      budget alarm. Login and a firewall (WAF) stay in step 6.
+- [x] Nothing automatic calls the model: tests use a fake model, and the
+      Deploy workflow checks `/api/ask` only in ways that stop before the
+      model.
+
+## Open decisions (confirm in 3.0)
+
+| # | Decision | Recommended | Why | Alternative |
+|---|---|---|---|---|
+| 1 | Model | **Decided 2026-11-27: Amazon Nova Micro** (`us.amazon.nova-micro-v1:0`, the default in `app/main.py`) | The cheapest usable Bedrock model (about $0.035 / $0.14 per 1M tokens, to confirm in 3.0); fine for short general answers | Claude Haiku 5.5 (about $0.10 / $0.50) if Nova Micro's answers fall short: set `MODEL_ID`, no code change |
+| 2 | LangChain integration | `ChatBedrockConverse` from `langchain-aws` | Stays in LangChain, which steps 4 (retrievers) and 5 (LangGraph agent) build on; signs requests with the Lambda role through boto3 | Anthropic's own SDK with its Bedrock client: the full Claude API surface, but a second way of calling models |
+| 3 | Daily question cap | 200 a day, whole site | Turns the worst case into a known, small cost (see Costs) | Raise it once real usage is known |
+| 4 | Monthly budget | $10; email at 80% of actual and 100% of forecast | Backstop in case the cap is set wrong | Lower |
+| 5 | Stream format | Plain text chunks | The page appends text as it arrives; nothing to parse | Server-sent events, if step 5 needs typed events (agent progress) |
+| 6 | Model ID form | Whatever 3.0 finds works in us-east-2: the model ID itself or a `us.` cross-region inference profile | Newer models are often offered only through an inference profile | None |
+
+## Design choices (and why)
+
+1. **Streaming**: an answer can take several seconds; showing it as it is
+   written feels immediate. The Lambda Web Adapter already supports it
+   (`AWS_LWA_INVOKE_MODE=response_stream`); the function URL switches to
+   `RESPONSE_STREAM`.
+2. **A daily cap, not just reserved concurrency**: concurrency 5 limits how
+   many answers run at once, not how many run in a day. Five copies answering
+   nonstop is roughly 86,000 questions a day. The cap is one conditional
+   DynamoDB update per question, so it holds across all Lambda copies.
+3. **Budget alarm as a backstop only**: billing data arrives hours late, so
+   the cap is the real-time guard and the budget catches a wrong setting.
+4. **Model and cap are Terraform variables**: they reach the function as
+   environment variables, so switching Nova Micro to Haiku, or changing the cap,
+   is an apply and not a code change. If the cap's table is not configured,
+   `/api/ask` refuses to answer (503), so a missing setting can never remove
+   the cap.
+5. **No question or answer text in the logs**: the API logs no per-answer
+   line at all for now (kept minimal); errors still reach the log group.
+
+## Step 3, piece by piece
+
+Same rules as step 2: each piece ends with a check you can see and leaves
+everything working; you run Terraform and Deploy; commits only when you say
+so.
+
+### 3.0 Get ready (no code)
+
+- [ ] Confirm the open decisions above.
+- [ ] Bedrock console, us-east-2 › Model catalog: Amazon Nova Micro is
+      offered and this account has access. `us.amazon.nova-micro-v1:0` is a
+      cross-region profile: it may route to us-east-1, us-east-2 and
+      us-west-2, so the organization's region rule must allow Bedrock there.
+- [ ] Find the exact ID to call:
+
+```powershell
+aws bedrock list-foundation-models --region us-east-2 --by-provider anthropic --query "modelSummaries[].modelId"
+aws bedrock list-inference-profiles --region us-east-2 --query "inferenceProfileSummaries[].inferenceProfileId"
+```
+
+- [ ] Smoke test from your PC (a fraction of a cent). One answer proves the
+      account, the region rule and model access before any code exists:
+
+```powershell
+'[{"role":"user","content":[{"text":"Say hello in five words."}]}]' | Set-Content -Encoding ascii "$env:TEMP\ask.json"
+aws bedrock-runtime converse --region us-east-2 --model-id <id from above> --messages "file://$env:TEMP\ask.json" --inference-config maxTokens=200
+```
+
+      If a `us.` profile fails with AccessDenied, the organization's region
+      rule may block a region the profile routes to: record which, then ask
+      the AWS administrators or use an in-region ID.
+- [ ] Record the model's us-east-2 Standard price from the Bedrock pricing
+      page in Costs below.
+- [ ] Check the organization allows AWS Budgets and DynamoDB (us-east-2).
+
+Result on 2026-11-27: `converse` with `us.amazon.nova-micro-v1:0` failed with
+`ThrottlingException: Too many tokens per day`. Every Bedrock invocation quota
+for the Nova and Claude Haiku models in us-east-2 is 0, and the daily ones
+cannot be changed in Service Quotas. AWS Support case **179580187900885**
+(service limit increase, opened 2026-11-27) asks for Nova Micro (1M tokens a
+day, 10K a minute, 20 requests a minute), Nova Lite, Nova 2 Lite, Nova Pro,
+Nova Premier and Claude Haiku 5.5. When it is granted, re-run the smoke test.
+
+**Done when:** the smoke test prints an answer, and the decisions and the
+model ID are recorded here.
+
+### 3.1 Base image refresh (security)
+
+- [ ] Review the ECR scan from 2.7 (9 HIGH, 5 MEDIUM, Debian base packages).
+- [ ] Move `python:3.13-slim` (and the Lambda Web Adapter, if a newer
+      release exists) to the newest digest; Checks green. Shipped by 3.2's
+      Deploy run.
+
+**Done when:** the new image's scan shows fewer HIGH findings, and any left
+are listed here as "no fix available" or why they do not matter.
+
+### 3.2 AWS plumbing: streaming and POST (you run Terraform)
+
+Applied on 2026-11-27 (0 added, 2 changed): `/api/*` allows all methods, API
+origin timeout 60 s, Lambda timeout 60 s, and Terraform ignores the
+function's environment variables (`OPENAI_API_KEY` and `OPENAI_MODEL` are
+set by hand in the Lambda console). Checked: health, hello and the alarm
+are fine; a POST with the right body hash reaches the API (405 on
+`/api/hello`), without it or with a wrong one Lambda returns 403.
+**Not done yet: streaming mode.** It must switch together with the image
+(function URL `RESPONSE_STREAM` plus `AWS_LWA_INVOKE_MODE=response_stream`),
+or even `/api/health` breaks until the next Deploy. Until then answers
+arrive in one piece.
+
+No AI yet: this proves the riskiest infrastructure change on the routes that
+already work.
+
+- [ ] Terraform: function URL `invoke_mode = "RESPONSE_STREAM"`; the `/api/*`
+      behavior allows all methods (CloudFront offers only GET/HEAD,
+      GET/HEAD/OPTIONS or all seven; FastAPI answers 405 to methods it does
+      not route); API origin response timeout 30 s to 60 s.
+- [ ] Check current AWS docs: CloudFront's two invoke permissions still cover
+      a streaming function URL; add what they require.
+- [ ] Dockerfile: `AWS_LWA_INVOKE_MODE=response_stream`.
+- [ ] You: one apply, then one full Deploy run (ships 3.1 too).
+
+**Done when**, through CloudFront: `/api/health` and `/api/hello` answer as
+before and the alarm stays OK; a POST with the right body hash gets the API's
+own 405 (POST signing works end to end); the same POST without the hash gets
+403. The hash below is the SHA-256 of an empty body:
+
+```powershell
+$empty = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+curl.exe -sS -o NUL -w "%{http_code}`n" -X POST -H "x-amz-content-sha256: $empty" "$site/api/hello"   # 405
+curl.exe -sS -o NUL -w "%{http_code}`n" -X POST "$site/api/hello"                                     # 403
+```
+
+### 3.3 Guardrails in AWS (you run Terraform)
+
+Before any code can call the model.
+
+- [ ] DynamoDB table `one-step-staging-usage` in us-east-2: on-demand, one
+      row per day (`day` key, `count`), rows expire after 7 days (TTL).
+- [ ] Monthly cost budget (decision 4), emailing `alert_email`.
+- [ ] Lambda role: `bedrock:InvokeModel` and
+      `bedrock:InvokeModelWithResponseStream` on the chosen model only (with
+      an inference profile: the profile ARN plus the model ARNs in the
+      regions it routes to); `dynamodb:UpdateItem` on the usage table only.
+- [ ] Function: timeout 15 s to 60 s; environment variables `MODEL_ID`
+      (Nova Micro), `DAILY_QUESTION_CAP` (200), `USAGE_TABLE`; new Terraform
+      variables `api_model_id` and `daily_question_cap`.
+- [ ] You: plan and apply. Expected about 3 to add (table, role policy,
+      budget) and 1 to change (the function); confirm against the plan.
+
+**Done when:** the budget shows in Billing › Budgets, the table exists, and
+the function's configuration shows the three variables. The live API is
+unchanged (the running code ignores them).
+
+### 3.4 `POST /api/ask`, on your PC
+
+- [x] `app/requirements.txt`: `langchain-aws` 1.10.0 (works with
+      `langchain-core` 1.8.5) and `boto3` 1.44.12, pinned.
+- [x] `app/main.py`, `POST /api/ask`:
+  1. Validate `{"question": "..."}`: trimmed, 1 to 1,000 characters, else 422.
+  2. Add 1 to today's row only while it is below the cap (one conditional
+     DynamoDB update); at the cap, 429 and no model call. No `USAGE_TABLE`:
+     503.
+  3. Build the prompt with a LangChain chat prompt template: a short system
+     message (plain text, no markdown, under about 150 words) plus the
+     question.
+  4. Call the model (`ChatBedrockConverse`) with `MODEL_ID`, else the default
+     Nova Micro (`us.amazon.nova-micro-v1:0`), and at most 1,024 output tokens; no `temperature` (current Claude models reject it).
+     Effort stays at the model's default; lower it later only if needed.
+  5. Stream only the answer text (not thinking blocks) as
+     `text/plain; charset=utf-8` with `Cache-Control: no-store`.
+  6. Dropped for now (keep code minimal): a log line per answer with token
+     counts. Add it if cost tracking needs it.
+- [x] Tests, with LangChain's fake chat model and a fake counter (no AWS):
+      the answer streams; 422 for empty and too long; 429 at the cap with no
+      model call; 503 without `USAGE_TABLE`; health and hello unchanged.
+      7 tests pass (2026-11-26). The DynamoDB update itself is checked live
+      in 3.6, against the real table.
+- [ ] Optional real call from your PC with your AWS credentials (a fraction
+      of a cent; counts against the cap): set `MODEL_ID` and `USAGE_TABLE`,
+      run uvicorn, POST a question. Behind Zscaler, boto3 may need
+      `AWS_CA_BUNDLE` set to the Zscaler bundle.
+
+**Done when:** `python -m pytest` passes and Checks is green; optionally, a
+local question streams an answer.
+
+### 3.5 Page: ask a question
+
+- [x] `web/index.html`: a question box (1,000 characters max) and an Ask
+      button below the hello button, plus one line saying answers come from
+      an AI model and can be wrong. The title stays (the health check looks
+      for it).
+- [x] `web/app.js`: hash the request body in the browser (Web Crypto
+      SHA-256) and send it as `x-amz-content-sha256`; read the streamed reply
+      and append it with `textContent`, never `innerHTML`; plain messages for
+      422, 429 and other failures.
+- [x] No CSP change: `connect-src 'self'` already allows it.
+- [x] Tested in Chrome (2026-11-26) behind a scratch stand-in that sends the
+      real CSP, rejects a missing or wrong body hash with 403, and streams a
+      fake answer: the answer streamed in, no console errors.
+
+**Done when:** locally, a question shows the answer growing as it streams,
+and the console has no errors.
+
+### 3.6 Deploy and verify live
+
+- [ ] Deploy workflow: also POST an empty question with the right hash to
+      `/api/ask` and expect 422. That proves the route is live without
+      calling the model or counting against the cap.
+- [ ] You: full Deploy run.
+
+**Done when:** the run is green; on the page, a question streams an answer;
+the usage table shows today's count; the log group shows the token line; the
+alarm stays OK. Optional: set `daily_question_cap` to 1 and apply to see the
+429, then set it back.
+
+### 3.7 Docs
+
+- [ ] README: `/api/ask`, Bedrock, the cap, running locally with AWS
+      credentials.
+- [ ] `docs/staging-deployment.md`, `docs/operations.md` and a new
+      `docs/staging-deployment-guide-v3.html` (like v2): Bedrock model
+      access, streaming, changing the model or the cap, costs,
+      troubleshooting (403 on POST: missing or wrong body hash; 429: the cap;
+      AccessDenied from Bedrock: the role or model access).
+- [ ] Teardown and rebuild order updated for the new resources.
+
+**Done when:** `scripts/check-repo.sh` passes and every link works.
+
+### 3.8 Coding-agent prompt
+
+- [ ] Update `docs/coding-agent-prompt.md` for version 3 (the v2 prompt
+      stays in tag `v2.0.0`) and re-run its checks.
+
+**Done when:** the prompt rebuilds and its checks pass.
+
+### 3.9 Release
+
+- [ ] Tag `v3.0.0` on the deployed commit once Checks is green on it.
+
+**Done when:** `v3.0.0` is on GitHub, pointing at the commit `/api/health`
+reports.
+
+## Costs (estimate; confirm the Bedrock price in 3.0)
+
+| Item | Estimate |
+|---|---|
+| Amazon Nova Micro | About $0.00009 a question (500 tokens in, 500 out, at about $0.035 / $0.14 per 1M tokens) |
+| Worst case without a cap | About 86,000 questions a day: about $8 a day on Nova Micro, $26 on Haiku 5.5 |
+| Worst case with a cap of 200 | About $0.02 a day on Nova Micro |
+| DynamoDB usage table | Cents a month |
+| AWS Budgets | Free for the first budgets in an account (confirm) |
+| Lambda | Longer runs while streaming; still well under $1 a month at this volume |
+
+## Known limits after step 3
+
+- The cap is shared by the whole site: one heavy user can use up a day's
+  questions for everyone. Per-visitor limits come with WAF or login in
+  step 6.
+- One question, one answer: no conversation memory (step 5), no documents or
+  citations (step 4).
+
+# Step 2: a Python API that welcomes you to the agentic world
+
+**Status: complete, tagged `v2.0.0` (2026-11-26).**
 
 Step 2 is a walking skeleton: the smallest version of the future RAG and
 agent app that runs end to end on the real stack (Python, FastAPI,
@@ -323,9 +627,9 @@ GitHub.
 
 ## Later steps (toward RAG and agents)
 
-- **Step 3, first AI answer**: `POST /api/ask` calls Claude, with answers
-  streamed. Before any AI call is public, add protection (login or rate
-  limit) and a budget alarm.
+- **Step 3, first AI answer**: planned in detail at the top of this file
+  (Claude on Amazon Bedrock, streamed, behind a daily cap and a budget
+  alarm).
 - **Step 4, RAG**: documents in S3, embeddings, a vector store (for example
   Amazon S3 Vectors or Qdrant), answers with citations, scored with RAGAS.
 - **Step 5, agent**: a LangGraph agent with tools (retriever first),
@@ -349,9 +653,9 @@ permission):
 | Model ID | `anthropic.claude-opus-5-5` | `claude-opus-5-5` |
 | Features | Core: messages, streaming, tool use, caching, citations | Everything Anthropic's own API has, including web search and Managed Agents |
 
-Default model: Claude Opus 5.5 (cheaper Claude models exist if cost matters
-more). Decide between the two in step 3, after checking which LangChain
-supports better.
+Decided on 2026-11-26: **Amazon Bedrock** (see step 3). Recommended model
+for step 3: Claude Haiku 5.5, the cheapest; Sonnet 5.5 or Opus 5.5 only
+where Haiku falls short.
 
 ### Keep in mind: Bedrock pricing tiers
 

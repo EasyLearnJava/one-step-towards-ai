@@ -185,14 +185,17 @@ resource "aws_cloudfront_distribution" "site" {
       https_port             = 443
       origin_protocol_policy = "https-only"
       origin_ssl_protocols   = ["TLSv1.2"]
+      origin_read_timeout    = 60 # step 3: wait for the model's answer
     }
   }
 
   # /api/* goes to the API; everything else falls through to the bucket
   # below. Never cached, same security headers as the page.
+  # All seven methods (CloudFront offers no GET+POST set) so POST /api/ask
+  # reaches the API (step 3); the API answers 405 to methods it does not use.
   ordered_cache_behavior {
     path_pattern               = "/api/*"
-    allowed_methods            = ["GET", "HEAD"]
+    allowed_methods            = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods             = ["GET", "HEAD"]
     target_origin_id           = "api"
     viewer_protocol_policy     = "redirect-to-https"

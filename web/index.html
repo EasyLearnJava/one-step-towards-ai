@@ -16,7 +16,12 @@
     button:hover { background: #1e40af; }
     button:disabled { opacity: .6; cursor: wait; }
     #reply { min-height: 3.2em; color: #172554; }
-    #reply.error { color: #b91c1c; }
+    #reply.error, #answer.error { color: #b91c1c; }
+    .ask { margin-top: 2.5rem; text-align: left; }
+    .ask label { display: block; font-weight: 700; }
+    textarea { display: block; width: 100%; margin-top: .5rem; padding: .8rem; border: 1px solid #94a3b8; border-radius: .6rem; font: inherit; resize: vertical; }
+    #answer { min-height: 3.2em; color: #172554; white-space: pre-wrap; }
+    .note { font-size: .9rem; }
   </style>
   <script src="app.js" defer></script>
 </head>
@@ -27,6 +32,13 @@
     <p>From curiosity to capable AI agents&mdash;one step at a time.</p>
     <button id="hello" type="button">Say hello to the API</button>
     <p id="reply" aria-live="polite"></p>
+    <section class="ask">
+      <label for="question">Ask a question</label>
+      <textarea id="question" rows="3" maxlength="1000" placeholder="For example: what is RAG?"></textarea>
+      <button id="ask" type="button">Ask</button>
+      <p id="answer" aria-live="polite"></p>
+      <p class="note">Answers come from an AI model and can be wrong.</p>
+    </section>
   </main>
 </body>
 </html>

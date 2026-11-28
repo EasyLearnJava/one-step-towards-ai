@@ -136,7 +136,7 @@ resource "aws_lambda_function" "api" {
   image_uri     = data.aws_ecr_image.api_start.image_uri
   architectures = ["x86_64"]
   memory_size   = 512
-  timeout       = 15
+  timeout       = 60 # step 3: a model's answer can take several seconds
 
   reserved_concurrent_executions = 5
 
@@ -149,8 +149,10 @@ resource "aws_lambda_function" "api" {
 
   lifecycle {
     # The Deploy workflow ships new code (piece 2.10); Terraform must not
-    # roll the function back to the starting image.
-    ignore_changes = [image_uri]
+    # roll the function back to the starting image. Environment variables
+    # (OPENAI_API_KEY, step 3) are set by hand in the Lambda console, so the
+    # key never appears in Terraform files or state.
+    ignore_changes = [image_uri, environment]
   }
 }
 

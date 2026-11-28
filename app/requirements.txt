@@ -2,3 +2,5 @@
 fastapi==0.165.0
 uvicorn==0.54.0
 langchain-core==1.8.5
+# Step 3: /api/ask calls the OpenAI API through LangChain.
+langchain-openai==1.8.5
