@@ -1,48 +1,37 @@
-// Calls the API on the same address (CloudFront sends /api/* to Lambda) and
-// shows the reply. textContent, never innerHTML: the reply is shown as text,
-// so nothing in it can run as code.
+// The chat window: each message goes to /api/ask on the same address
+// (CloudFront sends /api/* to Lambda) and the answer is added below it.
+// textContent, never innerHTML: replies are shown as text, so nothing in them
+// can run as code.
 document.addEventListener("DOMContentLoaded", () => {
-  const button = document.getElementById("hello");
-  const reply = document.getElementById("reply");
-
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    reply.classList.remove("error");
-    reply.textContent = "Asking the API...";
-    try {
-      const response = await fetch("/api/hello", { headers: { Accept: "application/json" } });
-      if (!response.ok) {
-        throw new Error(`The API answered ${response.status}.`);
-      }
-      const data = await response.json();
-      reply.textContent = data.message;
-    } catch (error) {
-      reply.classList.add("error");
-      reply.textContent = `Sorry, the API could not be reached. ${error.message}`;
-    } finally {
-      button.disabled = false;
-    }
-  });
-
-  // Ask a question: the answer streams in and is added as it arrives.
-  const askButton = document.getElementById("ask");
+  const messages = document.getElementById("messages");
   const question = document.getElementById("question");
-  const answer = document.getElementById("answer");
+  const send = document.getElementById("send");
   const problems = {
-    422: "Questions must be 1 to 1,000 characters.",
-    429: "The daily question limit is reached; try again tomorrow.",
+    422: "Messages must be 1 to 1,000 characters.",
+    502: "The AI model could not answer right now; try again in a moment.",
     503: "The AI answer is not set up yet.",
   };
+  const sources = { weather: "via Weather (Open-Meteo REST API)" };
 
-  askButton.addEventListener("click", async () => {
+  function add(role, text) {
+    const message = document.createElement("div");
+    message.className = `msg ${role}`;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    message.append(bubble);
+    messages.append(message);
+    messages.scrollTop = messages.scrollHeight;
+    return { message, bubble };
+  }
+
+  async function ask() {
     const text = question.value.trim();
-    answer.classList.remove("error");
-    if (!text) {
-      answer.textContent = "Type a question first.";
-      return;
-    }
-    askButton.disabled = true;
-    answer.textContent = "Thinking...";
+    if (!text || send.disabled) return;
+    question.value = "";
+    add("user", text);
+    const reply = add("bot", "Thinking...");
+    send.disabled = true;
     try {
       const body = JSON.stringify({ question: text });
       // CloudFront signs every request to the API, and for a POST Lambda also
@@ -57,21 +46,41 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!response.ok) {
         throw new Error(problems[response.status] || `The API answered ${response.status}.`);
       }
-      answer.textContent = "";
+      reply.bubble.textContent = "";
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        answer.textContent += value;
+        reply.bubble.textContent += value;
+        messages.scrollTop = messages.scrollHeight;
       }
-      if (!answer.textContent) {
+      if (!reply.bubble.textContent) {
         throw new Error("The answer came back empty.");
       }
+      // Which service answered, from the X-Tools-Used header (empty: the model alone).
+      const used = (response.headers.get("X-Tools-Used") || "").split(",").filter(Boolean);
+      for (const name of used) {
+        const via = document.createElement("div");
+        via.className = "via";
+        via.textContent = sources[name] || `via ${name}`;
+        reply.message.append(via);
+      }
     } catch (error) {
-      answer.classList.add("error");
-      answer.textContent = `Sorry, no answer. ${error.message}`;
+      reply.message.classList.add("error");
+      reply.bubble.textContent = `Sorry, no answer. ${error.message}`;
     } finally {
-      askButton.disabled = false;
+      send.disabled = false;
+      question.focus();
+    }
+  }
+
+  send.addEventListener("click", ask);
+  // Enter sends; Shift+Enter starts a new line.
+  question.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      ask();
     }
   });
+  question.focus();
 });

@@ -7,38 +7,39 @@
   <title>One Step At A Time</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 2rem; background: #f3f7ff; color: #172554; font-family: system-ui, sans-serif; }
-    main { max-width: 46rem; text-align: center; }
-    .eyebrow { color: #1d4ed8; font-size: .9rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-    h1 { margin: 1rem 0; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 1.05; }
-    p { color: #475569; font-size: clamp(1.1rem, 3vw, 1.4rem); line-height: 1.6; }
-    button { margin-top: 1rem; padding: .8rem 1.6rem; border: 0; border-radius: .6rem; background: #1d4ed8; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    html, body { height: 100%; }
+    body { margin: 0; display: flex; flex-direction: column; background: #f3f7ff; color: #172554; font-family: system-ui, sans-serif; }
+    header { padding: .9rem 1rem; text-align: center; border-bottom: 1px solid #dbe3f5; background: #fff; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header p { margin: .2rem 0 0; color: #64748b; font-size: .85rem; }
+    #messages { flex: 1; overflow-y: auto; width: 100%; max-width: 46rem; margin: 0 auto; padding: 1rem; }
+    .msg { margin: .6rem 0; display: flex; flex-direction: column; }
+    .bubble { max-width: 85%; padding: .7rem .95rem; border-radius: 1rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .user { align-items: flex-end; }
+    .user .bubble { background: #1d4ed8; color: #fff; border-bottom-right-radius: .3rem; }
+    .bot { align-items: flex-start; }
+    .bot .bubble { background: #fff; border: 1px solid #dbe3f5; border-bottom-left-radius: .3rem; }
+    .bot.error .bubble { color: #b91c1c; border-color: #fecaca; }
+    .via { margin-top: .25rem; color: #64748b; font-size: .78rem; }
+    .composer { width: 100%; max-width: 46rem; margin: 0 auto; padding: .75rem 1rem 1rem; display: flex; gap: .5rem; }
+    textarea { flex: 1; padding: .75rem; border: 1px solid #94a3b8; border-radius: .7rem; font: inherit; resize: none; }
+    button { padding: 0 1.3rem; border: 0; border-radius: .7rem; background: #1d4ed8; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
     button:hover { background: #1e40af; }
     button:disabled { opacity: .6; cursor: wait; }
-    #reply { min-height: 3.2em; color: #172554; }
-    #reply.error, #answer.error { color: #b91c1c; }
-    .ask { margin-top: 2.5rem; text-align: left; }
-    .ask label { display: block; font-weight: 700; }
-    textarea { display: block; width: 100%; margin-top: .5rem; padding: .8rem; border: 1px solid #94a3b8; border-radius: .6rem; font: inherit; resize: vertical; }
-    #answer { min-height: 3.2em; color: #172554; white-space: pre-wrap; }
-    .note { font-size: .9rem; }
+    .note { margin: 0 0 .8rem; text-align: center; color: #64748b; font-size: .78rem; }
   </style>
   <script src="app.js" defer></script>
 </head>
 <body>
-  <main>
-    <span class="eyebrow">Learning agentic applications</span>
+  <header>
     <h1>One Step At A Time</h1>
-    <p>From curiosity to capable AI agents&mdash;one step at a time.</p>
-    <button id="hello" type="button">Say hello to the API</button>
-    <p id="reply" aria-live="polite"></p>
-    <section class="ask">
-      <label for="question">Ask a question</label>
-      <textarea id="question" rows="3" maxlength="1000" placeholder="For example: what is RAG?"></textarea>
-      <button id="ask" type="button">Ask</button>
-      <p id="answer" aria-live="polite"></p>
-      <p class="note">Answers come from an AI model and can be wrong.</p>
-    </section>
-  </main>
+    <p>Ask about the weather anywhere, or anything else.</p>
+  </header>
+  <main id="messages" aria-live="polite"></main>
+  <div class="composer">
+    <textarea id="question" rows="2" maxlength="1000" placeholder="For example: what's the weather in Chicago?" aria-label="Your message"></textarea>
+    <button id="send" type="button">Send</button>
+  </div>
+  <p class="note">Answers come from an AI model and can be wrong. Weather data: Open-Meteo.</p>
 </body>
 </html>

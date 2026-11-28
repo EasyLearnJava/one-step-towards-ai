@@ -5,12 +5,30 @@
 | 2 | Python API skeleton on Lambda behind CloudFront | complete, tagged `v2.0.0` (2026-11-26) |
 | 3 | First AI answer on Amazon Bedrock (Nova Micro), streamed | in progress, below |
 
+# Step 4 (in progress): chatbot with tools
+
+The page is one chat window. `/api/ask` routes each message: weather
+questions go to Open-Meteo, everything else to the model alone.
+
+- [x] 4.1 Weather as a plain REST call (2026-11-28): `app/weather.py`,
+      `get_weather(city)` (Open-Meteo geocoding, then current weather and a
+      3-day forecast; no key). Call 1: the model answers or asks for the
+      weather of up to 3 places; then call 2 answers the whole question with
+      that data, so "weather in X, and what is Y?" works. Call 2 gets no
+      tools: `tool_choice="none"` made the model claim it had no live data.
+      The `X-Tools-Used` header tells the page which service answered.
+- [x] Chat-only page: messages, input, Send (Enter), a "via" label per
+      answer. No memory between messages yet.
+- [ ] Commit, Deploy (no Terraform or key changes needed).
+- [ ] Next services, over MCP: stocks (Alpha Vantage), flights (Kiwi.com),
+      hotels (Trivago).
+
 # Step 3: first AI answer on Amazon Bedrock (Nova Micro)
 
 **Change on 2026-11-27:** while the Bedrock quotas are 0 (support case
 179580187900885), `/api/ask` calls the **OpenAI API** instead
-(`langchain-openai`, model `gpt-4.1-nano` unless `OPENAI_MODEL` says
-otherwise, key in `OPENAI_API_KEY`), and there is **no daily cap**
+(`langchain-openai`, model `gpt-5.4-nano` unless `OPENAI_MODEL` says
+otherwise (`gpt-4.1-nano` was retired by OpenAI), key in `OPENAI_API_KEY`), and there is **no daily cap**
 (`count_question` was removed). The Bedrock plan below still applies once
 the quota is raised; the cap would then be written again from 3.3 and 3.4.
 
